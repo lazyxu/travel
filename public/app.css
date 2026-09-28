@@ -1305,3 +1305,36 @@ textarea {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* 2026-09-28 UI polish: compact editor tap targets */
+.item-addon-card {
+  cursor: pointer;
+}
+.item-addon-card:active {
+  border-color: #bcd7ce;
+  background: #f1f7f4;
+  transform: scale(.995);
+}
+.item-editor-main > .form-actions {
+  position: sticky;
+  z-index: 6;
+  bottom: 0;
+  margin-top: 2px;
+  padding: 10px 0 2px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0), var(--surface) 28%);
+}
+.item-subsheet-body,
+.link-analyzer-body {
+  overscroll-behavior: contain;
+}
+@media (hover: hover) {
+  .item-addon-card:hover {
+    border-color: #d1d9d3;
+    background: #f8faf8;
+  }
+  .item-addon-card.active:hover {
+    border-color: #bcd7ce;
+    background: #f2f8f5;
+  }
+}

@@ -249,9 +249,9 @@ export function isPrivateAddress(address) {
 }
 
 function fallbackTitle(url, platform = 'web') {
-  if (platform !== 'web') return PLATFORM_LABELS[platform] || '参考入口';
+  if (platform !== 'web') return PLATFORM_LABELS[platform] || '链接';
   try { return new URL(url).hostname.replace(/^www\./i, ''); }
-  catch { return '参考入口'; }
+  catch { return '链接'; }
 }
 
 async function resolvePublicAddress(hostname) {
@@ -328,11 +328,11 @@ export async function resolveReferenceMetadata(refs) {
     const preservedAutoTitle = cleanTitle(ref.autoTitle || '');
 
     if (ref.kind === 'copy') {
-      const autoTitle = preservedAutoTitle || PLATFORM_LABELS[platform] || '参考入口';
+      const autoTitle = preservedAutoTitle || PLATFORM_LABELS[platform] || '链接';
       return { kind: 'copy', platform, value, title: customTitle || autoTitle, customTitle, autoTitle };
     }
     if (ref.kind === 'uri') {
-      const autoTitle = preservedAutoTitle || PLATFORM_LABELS[platform] || '参考入口';
+      const autoTitle = preservedAutoTitle || PLATFORM_LABELS[platform] || '链接';
       return { kind: 'uri', platform, value, url: ref.url || value, title: customTitle || autoTitle, customTitle, autoTitle };
     }
 

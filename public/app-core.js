@@ -401,7 +401,7 @@ function baiduPointUrl(item) {
   item = itemRoutePoint(item);
   if (!hasItemCoordinates(item)) return '';
   const scheme = baiduAppScheme();
-  const label = itemLocationLabel(item) || item.title || '行程地点';
+  const label = itemLocationLabel(item) || item.title || '行程位置';
   const pairs = [
     ['location', `${item.latitude},${item.longitude}`],
     ['title', label],

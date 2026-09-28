@@ -63,14 +63,14 @@ export function normalizeReferences(value, maxItems = 12) {
     const httpMatch = raw.match(/https?:\/\/[^\s]+/i);
     let ref;
     if (httpMatch) {
-      const url = optionalUrl(httpMatch[0].replace(/[),，。；;]+$/g, ''), '参考链接');
+      const url = optionalUrl(httpMatch[0].replace(/[),，。；;]+$/g, ''), '链接');
       ref = { kind: 'url', url, value: url, customTitle, autoTitle };
     } else if (/^weixin:\/\//i.test(raw)) {
       ref = { kind: 'uri', url: raw, value: raw, customTitle, autoTitle };
     } else if (/(?:#)?小程序:\/\//i.test(raw)) {
       ref = { kind: 'copy', value: raw, customTitle, autoTitle };
     } else {
-      throw httpError(400, '参考入口仅支持网页链接、weixin:// 链接或微信小程序口令');
+      throw httpError(400, '链接仅支持网页链接、weixin:// 链接或微信小程序口令');
     }
 
     const key = `${ref.kind}:${ref.value}`;
@@ -81,7 +81,7 @@ export function normalizeReferences(value, maxItems = 12) {
     } else {
       refs.push(ref);
     }
-    if (refs.length > maxItems) throw httpError(400, `参考入口最多支持 ${maxItems} 个`);
+    if (refs.length > maxItems) throw httpError(400, `链接最多支持 ${maxItems} 个`);
   }
 
   return refs;

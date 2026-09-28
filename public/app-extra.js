@@ -257,7 +257,7 @@ function shareSettingsFieldsHtml(settings = {}) {
   return `
     <div class="share-settings">
       ${option('images', '图片', '共享行程图片')}
-      ${option('links', '参考链接', '共享小红书、点评、微信等链接')}
+      ${option('links', '链接', '共享小红书、点评、微信等链接')}
       ${option('notes', '备注', '共享旅行、当天、行程及费用备注')}
       ${option('hotelPhone', '酒店电话', '共享住宿记录里的联系电话')}
       ${option('expenses', '费用', '共享金额、分类及是否已支付')}
@@ -382,7 +382,7 @@ function referenceEditorRowHtml(ref = {}, index = 0) {
         <span>${escapeHtml(meta.label)} · ${escapeHtml(value)}</span>
       </div>
       <button class="button ghost small" type="button" data-edit-reference>编辑</button>
-      <button class="reference-remove" type="button" data-remove-reference aria-label="删除参考入口">×</button>
+      <button class="reference-remove" type="button" data-remove-reference aria-label="删除链接">×</button>
     </div>
   `;
 }

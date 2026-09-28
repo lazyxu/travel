@@ -63,7 +63,7 @@ function linkAnalysisReferenceResultHtml(result) {
     <input name="analysisPlatform" type="hidden" value="${attr(platform)}" />
     <input name="analysisAutoTitle" type="hidden" value="${attr(analysis.autoTitle || reference.autoTitle || reference.title || '')}" />
     <input name="analysisAppUrl" type="hidden" value="${attr(analysis.appUrl || reference.appUrl || '')}" />
-    <div class="link-analysis-kind"><span>${icon}</span><strong>${escapeHtml(analysis.platformLabel || referencePlatformMeta(platform).label)}</strong><em>参考链接</em></div>
+    <div class="link-analysis-kind"><span>${icon}</span><strong>${escapeHtml(analysis.platformLabel || referencePlatformMeta(platform).label)}</strong><em>链接</em></div>
     <div class="link-analysis-readonly"><span>自动标题</span><strong>${escapeHtml(analysis.autoTitle || reference.autoTitle || reference.title || '未提取到标题')}</strong></div>
     <label class="field"><span>展示标题</span><input name="analysisDisplayTitle" maxlength="180" value="${attr(reference.customTitle || analysis.displayTitle || '')}" placeholder="可手动调整；留空则使用自动标题" /></label>
     <div class="link-analysis-open"><span>打开方式</span><strong>${analysis.openMode === 'app' ? 'App' : analysis.openMode === 'copy' ? '复制口令' : '网页'}</strong></div>
@@ -79,7 +79,7 @@ function linkAnalysisLocationResultHtml(result) {
     <input name="analysisLongitude" type="hidden" value="${attr(location.longitude ?? '')}" />
     <input name="analysisCoordType" type="hidden" value="${attr(location.coordType || 'bd09ll')}" />
     <div class="link-analysis-kind"><span>📍</span><strong>百度地图</strong><em>位置</em></div>
-    <label class="field"><span>地点名称</span><input name="analysisLocationName" maxlength="160" value="${attr(location.name || '')}" placeholder="例如：灵隐寺" /></label>
+    <label class="field"><span>位置名称</span><input name="analysisLocationName" maxlength="160" value="${attr(location.name || '')}" placeholder="例如：灵隐寺" /></label>
     <label class="field"><span>可读地址</span><input name="analysisAddress" maxlength="240" value="${attr(location.address || '')}" placeholder="例如：杭州市西湖区法云弄1号" /></label>
     <div class="link-analysis-readonly"><span>定位状态</span><strong>${location.latitude !== null && location.latitude !== undefined ? '已定位' : '未获得坐标，可手动保留名称/地址'}</strong></div>
   `;
@@ -100,7 +100,7 @@ function linkAnalysisBookingResultHtml(result) {
     <div class="link-analysis-readonly"><span>自动标题</span><strong>${escapeHtml(analysis.autoTitle || reference.autoTitle || reference.title || '未提取到标题')}</strong></div>
     <label class="field"><span>酒店名称</span><input name="analysisHotelName" maxlength="160" value="${attr(lodging.hotelName || '')}" /></label>
     <label class="field"><span>预订平台</span><input name="analysisBookingPlatform" maxlength="160" value="${attr(lodging.bookingPlatform || '')}" /></label>
-    <label class="field"><span>地点名称</span><input name="analysisLocationName" maxlength="160" value="${attr(lodging.locationName || lodging.hotelName || '')}" /></label>
+    <label class="field"><span>位置名称</span><input name="analysisLocationName" maxlength="160" value="${attr(lodging.locationName || lodging.hotelName || '')}" /></label>
     <label class="field"><span>地址</span><input name="analysisAddress" maxlength="240" value="${attr(lodging.address || '')}" /></label>
   `;
 }
@@ -172,7 +172,7 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
     <div class="stack">
       <div class="link-analysis-step">
         <span>1</span>
-        <div><strong>粘贴链接</strong><small>系统会自动判断链接属于位置、酒店预订还是参考内容</small></div>
+        <div><strong>粘贴链接</strong><small>系统会自动判断链接属于位置、酒店预订还是普通链接</small></div>
       </div>
       <div class="link-analysis-input-row">
         <input name="linkValue" inputmode="url" value="${attr(initial.bookingUrl || initial.value || '')}" placeholder="粘贴链接…" autocomplete="off" />
@@ -217,7 +217,7 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
       form.dataset.hasAnalysis = '1';
       form.dataset.dirty = '1';
       status.textContent = result.type === 'location'
-        ? '已识别为位置，请确认地点名称和地址'
+        ? '已识别为位置，请确认位置名称和地址'
         : result.type === 'booking'
           ? '已识别为住宿预订，请确认酒店信息'
           : '已分析链接，请确认展示标题';

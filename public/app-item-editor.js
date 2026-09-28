@@ -77,13 +77,13 @@ function itemEditorDetailsSummary(typeValue, details = {}) {
 function itemEditorLocationSummary(form) {
   const name = form.querySelector('[name="locationName"]')?.value || '';
   const address = form.querySelector('[name="location"]')?.value || '';
-  return [name, address && address !== name ? address : ''].filter(Boolean).join(' · ') || '未添加地点';
+  return [name, address && address !== name ? address : ''].filter(Boolean).join(' · ') || '未添加位置';
 }
 
 function itemEditorReferenceSummary(refs = []) {
-  if (!refs.length) return '未添加参考入口';
+  if (!refs.length) return '未添加链接';
   const labels = refs.slice(0, 2).map(ref => ref.customTitle || ref.autoTitle || '').filter(Boolean);
-  return `${refs.length} 个参考${labels.length ? ` · ${labels.join('、')}` : ''}`;
+  return `${refs.length} 个链接${labels.length ? ` · ${labels.join('、')}` : ''}`;
 }
 
 function itemEditorImageSummary(urls = []) {
@@ -567,7 +567,7 @@ function bindReferenceEditorWithin(root, mainForm) {
   const syncEmpty = () => {
     const empty = list.querySelector('[data-reference-empty]');
     if (!rows().length && !empty) {
-      list.innerHTML = '<div class="reference-editor-empty" data-reference-empty>还没有参考链接</div>';
+      list.innerHTML = '<div class="reference-editor-empty" data-reference-empty>还没有链接</div>';
     } else if (rows().length && empty) {
       empty.remove();
     }
@@ -620,7 +620,7 @@ function bindReferenceEditorWithin(root, mainForm) {
     }
 
     if (event.target.closest('[data-add-reference]')) {
-      if (rows().length >= 12) return showToast('最多 12 个参考入口', 'error');
+      if (rows().length >= 12) return showToast('最多 12 个链接', 'error');
       openLinkAnalyzer({
         context: 'reference',
         title: '添加链接',
@@ -988,6 +988,13 @@ function bindCompactItemEditor(mainForm, item) {
 
   typeSelect.addEventListener('change', syncTypeCard);
   syncTypeCard();
+
+  mainForm.querySelectorAll('[data-addon-card]').forEach(card => {
+    card.addEventListener('click', event => {
+      if (event.target.closest('button, a, input, select, textarea')) return;
+      card.querySelector('[data-open-addon]')?.click();
+    });
+  });
 
   mainForm.querySelectorAll('[data-open-addon]').forEach(button => {
     button.addEventListener('click', () => {
