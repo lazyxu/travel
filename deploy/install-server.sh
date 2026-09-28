@@ -187,7 +187,7 @@ ensure_immediate_command() {
           say "当前终端已可直接使用：travel-server（$candidate）"
           return 0
         fi
-      elif [[ "$candidate" -ef "$MANAGER_PATH" 2>/dev/null ]]; then
+      elif [[ -e "$candidate" ]] && [[ "$candidate" -ef "$MANAGER_PATH" ]]; then
         IFS="$old_ifs"
         say "当前终端已可直接使用：travel-server（$candidate）"
         return 0
