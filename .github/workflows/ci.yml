@@ -14,6 +14,20 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: travel
+          POSTGRES_PASSWORD: travel
+          POSTGRES_DB: travel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U travel -d travel"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +38,11 @@ jobs:
       - name: Validate PWA manifest
         run: node -e "JSON.parse(require('fs').readFileSync('public/manifest.webmanifest','utf8'))"
       - run: npm test
+      - name: Run integration smoke test
+        env:
+          DATABASE_URL: postgres://travel:travel@127.0.0.1:5432/travel
+          TRAVEL_AUTH_DISABLED: "1"
+        run: node test/integration.mjs
       - name: Validate installer syntax
         run: bash -n deploy/install-server.sh
       - name: Validate Compose
