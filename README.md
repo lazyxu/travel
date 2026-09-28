@@ -10,7 +10,7 @@
 - 支持直接粘贴带链接的分享文案，前端自动提取第一个 `http/https` URL；
 - 旅行待办：截止日期、备注、完成状态；
 - 移动端优先 UI；
-- 单用户密码登录；
+- 默认关闭访问认证，打开网页即可直接使用；后续可按需开启密码登录；
 - PostgreSQL 持久化；
 - Docker Compose 部署；
 - `travel-server` 一键更新、状态、日志、诊断与备份。
@@ -58,7 +58,7 @@ curl -fsSL --retry 3 --connect-timeout 15 \
 bash "$tmp"; rc=$?; rm -f "$tmp"; exit "$rc"
 ```
 
-默认访问端口为 `3080`，安装完成后脚本会打印首次访问密码。手机与服务器在同一局域网时，使用：
+默认访问端口为 `3080`，当前默认**不启用密码登录**，打开网页即可直接使用。手机与服务器在同一局域网时，使用：
 
 ```text
 http://服务器局域网IP:3080
@@ -97,7 +97,7 @@ travel-server doctor
 travel-server backup
 travel-server restart
 travel-server stop
-travel-server password
+travel-server password   # 仅在后续开启认证时使用
 ```
 
 备份文件保存到：
@@ -136,6 +136,30 @@ travel-server restart
 ```dotenv
 TRAVEL_BIND=127.0.0.1
 ```
+
+### 后续开启密码登录
+
+当前默认配置是：
+
+```dotenv
+TRAVEL_AUTH_DISABLED=1
+TRAVEL_ADMIN_PASSWORD=
+```
+
+后续需要开启时，在 `~/.travel/config/.env` 中设置：
+
+```dotenv
+TRAVEL_AUTH_DISABLED=0
+TRAVEL_ADMIN_PASSWORD=你的访问密码
+```
+
+然后执行：
+
+```bash
+travel-server restart
+```
+
+`TRAVEL_SESSION_SECRET` 在首次安装时仍会自动随机生成，因此以后开启认证不需要重新安装或迁移数据库。
 
 ## 本地开发
 
