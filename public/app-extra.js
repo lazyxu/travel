@@ -252,32 +252,43 @@ function bindImageViewerActions() {
 
 function renderSharedTrip() {
   const { trip, days } = state.current;
+  const status = tripStatusMeta(trip);
   el.topbarTitle.textContent = '只读行程';
   el.backHome.classList.add('hidden');
   el.bottomNav.classList.add('hidden');
 
   el.main.innerHTML = `
-    <section class="shared-trip-head">
-      <span class="readonly-badge">只读分享</span>
+    <section class="shared-trip-head shared-trip-head-${status.kind}">
+      <div class="shared-trip-badges">
+        <span class="readonly-badge">只读分享</span>
+        <span class="trip-status trip-status-${status.kind}">${escapeHtml(status.label)}</span>
+      </div>
       <h1>${escapeHtml(trip.title)}</h1>
-      <div>${escapeHtml([trip.destination, formatRange(trip.start_date, trip.end_date)].filter(Boolean).join(' · '))}</div>
+      <div class="shared-trip-meta">${escapeHtml([trip.destination, formatRange(trip.start_date, trip.end_date)].filter(Boolean).join(' · '))}</div>
+      ${status.kind === 'active' && status.progress !== null ? `<div class="trip-progress shared-trip-progress" aria-label="旅行进度 ${status.progress}%"><i style="width: ${status.progress}%"></i></div>` : ''}
       ${trip.notes ? `<p>${escapeHtml(trip.notes)}</p>` : ''}
     </section>
     <div class="shared-days">
-      ${days.map(day => `
-        <section class="shared-day">
-          <div class="section-head">
-            <div>
-              <h2>D${dayNumber(day.day_date, trip.start_date)} · ${escapeHtml(formatDate(day.day_date))}</h2>
-              <div class="section-subtitle">${escapeHtml(day.title || weekday(day.day_date))}</div>
+      ${days.map(day => {
+        const isToday = String(day.day_date || '').slice(0, 10) === localDateKey();
+        return `
+          <section class="shared-day ${isToday ? 'today' : ''}">
+            <div class="section-head shared-day-head">
+              <div>
+                <div class="shared-day-title-row">
+                  <h2>D${dayNumber(day.day_date, trip.start_date)} · ${escapeHtml(formatDate(day.day_date))}</h2>
+                  ${isToday ? '<span class="shared-today-badge">今天</span>' : ''}
+                </div>
+                <div class="section-subtitle">${escapeHtml(day.title || weekday(day.day_date))}</div>
+              </div>
+              ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}">${escapeHtml(dayRouteLabel(day))}</a>` : ''}
             </div>
-            ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}">${escapeHtml(dayRouteLabel(day))}</a>` : ''}
-          </div>
-          <div class="timeline">
-            ${dayDisplayItems(day).length ? dayTimelineHtml(day, { readonly: true }) : '<div class="empty-state"><strong>这一天暂无安排</strong></div>'}
-          </div>
-        </section>
-      `).join('')}
+            <div class="timeline">
+              ${dayDisplayItems(day).length ? dayTimelineHtml(day, { readonly: true }) : '<div class="empty-state"><strong>这一天暂无安排</strong></div>'}
+            </div>
+          </section>
+        `;
+      }).join('')}
     </div>
   `;
   bindReferenceActions();
