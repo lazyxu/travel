@@ -580,3 +580,20 @@ button { color: inherit; }
 .share-created-help { margin-top: 5px; color: var(--muted); font-size: 10px; }
 .leg-control[data-leg-drop] { border-radius: 12px; }
 .leg-control[data-leg-drop].drag-leg-hover { background: rgba(31,111,95,.08); box-shadow: inset 0 0 0 1px rgba(31,111,95,.2); }
+
+.image-editor { display: grid; gap: 9px; }
+.image-editor-toolbar { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; }
+.image-remote-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.image-remote-row input { min-width: 0; border: 1px solid var(--line); border-radius: 11px; padding: 9px 10px; background: #fff; }
+.image-editor-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 7px; }
+.image-editor-card { position: relative; aspect-ratio: 1 / 1; overflow: hidden; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-2); }
+.image-editor-card img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.image-editor-drag, .image-editor-remove { position: absolute; top: 5px; width: 28px; height: 28px; border: 0; border-radius: 9px; background: rgba(255,255,255,.92); box-shadow: 0 3px 10px rgba(0,0,0,.12); }
+.image-editor-drag { left: 5px; cursor: grab; touch-action: none; font-size: 16px; }
+.image-editor-remove { right: 5px; color: #9a3c35; font-size: 18px; }
+.image-editor-dragging { opacity: .45; }
+.image-editor-drop { box-shadow: inset 0 0 0 3px var(--accent); }
+@media (max-width: 420px) {
+  .image-editor-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .image-editor-toolbar { grid-template-columns: 1fr; }
+}

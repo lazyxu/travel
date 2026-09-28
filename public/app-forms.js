@@ -305,19 +305,7 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
       <input name="coordType" type="hidden" value="${attr(item.coord_type || 'bd09ll')}" />
       <label class="field"><span>备注</span><textarea name="notes" maxlength="5000" placeholder="预约信息、交通方式、必点菜等">${escapeHtml(item.notes || '')}</textarea></label>
       ${referenceEditorHtml(references)}
-      <div class="field">
-        <span>行程图片</span>
-        <div class="image-upload-row">
-          <label class="button ghost small image-upload-button">
-            📷 从相册添加
-            <input name="imageFiles" type="file" accept="image/*" multiple hidden />
-          </label>
-          <span class="image-upload-status" data-image-upload-status>浏览器会先压缩再上传</span>
-        </div>
-        <textarea name="imageUrls" class="image-url-input" maxlength="24000" placeholder="也可粘贴外部图片 URL，每行一张；最多 12 张">${escapeHtml((item.image_urls || []).join('\n'))}</textarea>
-      </div>
-      <div class="image-preview" data-image-preview>${imagePreviewHtml(item.image_urls || [])}</div>
-      <p class="form-help">手机相册图片会压缩到最长边约 1600px 后上传到你自己的服务器；也支持外部 http/https 图片 URL。</p>
+      ${imageEditorHtml(item.image_urls || [])}
       ${initialExpenseFieldsHtml(item)}
       <div class="form-actions">
         ${item.id ? '<button id="delete-item" class="button danger" type="button">删除</button>' : ''}
@@ -511,47 +499,7 @@ function openItemForm(day, item = null) {
     });
   }
 
-  const imageInput = el.sheetForm.querySelector('[name="imageUrls"]');
-  const imageFiles = el.sheetForm.querySelector('[name="imageFiles"]');
-  const imagePreview = el.sheetForm.querySelector('[data-image-preview]');
-  const imageUploadStatus = el.sheetForm.querySelector('[data-image-upload-status]');
-  if (imageInput && imagePreview) {
-    const renderImagePreview = () => { imagePreview.innerHTML = imagePreviewHtml(extractImageRefs(imageInput.value, 12)); };
-    imageInput.addEventListener('input', renderImagePreview);
-    imageInput.addEventListener('paste', () => setTimeout(renderImagePreview, 0));
-
-    imageFiles?.addEventListener('change', async () => {
-      const files = [...(imageFiles.files || [])];
-      if (!files.length) return;
-      let refs = extractImageRefs(imageInput.value, 12);
-      if (refs.length + files.length > 12) {
-        showToast('每条行程最多 12 张图片', 'error');
-        imageFiles.value = '';
-        return;
-      }
-
-      imageFiles.disabled = true;
-      try {
-        for (let index = 0; index < files.length; index += 1) {
-          if (imageUploadStatus) imageUploadStatus.textContent = `正在处理 ${index + 1}/${files.length}…`;
-          const blob = await compressImageFile(files[index]);
-          const url = await uploadImageBlob(blob);
-          refs.push(url);
-          refs = [...new Set(refs)].slice(0, 12);
-          imageInput.value = refs.join('\n');
-          renderImagePreview();
-        }
-        if (imageUploadStatus) imageUploadStatus.textContent = `已添加 ${files.length} 张图片`;
-        showToast('图片已上传');
-      } catch (error) {
-        if (imageUploadStatus) imageUploadStatus.textContent = '上传失败';
-        showToast(error.message, 'error');
-      } finally {
-        imageFiles.disabled = false;
-        imageFiles.value = '';
-      }
-    });
-  }
+  bindImageEditor();
 
   if (item) {
     el.sheetForm.querySelector('#delete-item').addEventListener('click', async () => {
