@@ -176,9 +176,12 @@ try {
   assert.equal(expense.paid, true);
 
   aggregate = await json(`/api/trips/${created.trip.id}`);
-  assert.equal(aggregate.expenses.length, 1);
-  assert.equal(aggregate.expenses[0].title, 'West Lake ticket');
-  assert.equal(String(aggregate.expenses[0].item_id), String(first.id));
+  assert.equal(aggregate.expenses.length, 2);
+  const atomicExpense = aggregate.expenses.find(value => String(value.item_id) === String(second.id));
+  assert.equal(Number(atomicExpense.amount), 88);
+  const westLakeExpense = aggregate.expenses.find(value => String(value.id) === String(expense.id));
+  assert.equal(westLakeExpense.title, 'West Lake ticket');
+  assert.equal(String(westLakeExpense.item_id), String(first.id));
 
   await json(`/api/expenses/${expense.id}`, {
     method: 'PUT',
