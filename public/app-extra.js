@@ -24,24 +24,14 @@ function dayTimelineHtml(day, { readonly = false } = {}) {
 
 function inlineExpenseHtml(item, { readonly = false } = {}) {
   const expenses = itemExpenses(item);
-  if (!expenses.length && readonly) return '';
+  if (!expenses.length) return '';
   const currency = state.current?.trip?.currency || 'CNY';
   const total = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-  const rows = expenses.map(expense => `
-    <button class="inline-expense-row ${expense.paid ? 'paid' : ''}" type="button"
-      ${readonly ? 'disabled' : `data-edit-expense="${attr(expense.id)}" data-expense-item="${attr(item.id)}"`}>
-      <span>${escapeHtml(expense.category)} · ${escapeHtml(expense.title)}</span>
-      <strong>${escapeHtml(formatMoney(expense.amount, currency))}</strong>
-      <em>${expense.paid ? '已支付' : '未支付'}</em>
-    </button>
-  `).join('');
+  const paidCount = expenses.filter(expense => expense.paid).length;
   return `
-    <div class="inline-expenses">
-      <div class="inline-expense-head">
-        <span>费用${expenses.length ? ` · ${escapeHtml(formatMoney(total, currency))}` : ''}</span>
-        ${readonly ? '' : `<button class="card-action" type="button" data-add-expense="${attr(item.id)}">＋费用</button>`}
-      </div>
-      ${rows}
+    <div class="inline-expense-summary">
+      <span>¥ ${escapeHtml(formatMoney(total, currency))}</span>
+      <em>${expenses.length} 笔${paidCount ? ` · 已付 ${paidCount}` : ''}</em>
     </div>
   `;
 }
@@ -110,6 +100,97 @@ async function bindItineraryActions(day) {
     button.addEventListener('click', () => {
       const expense = (state.current.expenses || []).find(value => String(value.id) === button.dataset.unlinkedExpense);
       if (expense) openExpenseForm(expense, null);
+    });
+  });
+}
+
+function ensureImageViewer() {
+  let viewer = document.querySelector('#image-viewer');
+  if (viewer) return viewer;
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="image-viewer" class="image-viewer hidden" role="dialog" aria-modal="true">
+      <button class="image-viewer-close" type="button" data-image-viewer-close aria-label="关闭">×</button>
+      <button class="image-viewer-nav prev" type="button" data-image-viewer-prev aria-label="上一张">‹</button>
+      <div class="image-viewer-stage" data-image-viewer-stage>
+        <img data-image-viewer-img alt="" />
+      </div>
+      <button class="image-viewer-nav next" type="button" data-image-viewer-next aria-label="下一张">›</button>
+      <div class="image-viewer-counter" data-image-viewer-counter></div>
+    </div>
+  `);
+  viewer = document.querySelector('#image-viewer');
+  viewer.querySelector('[data-image-viewer-close]')?.addEventListener('click', closeImageViewer);
+  viewer.addEventListener('click', event => {
+    if (event.target === viewer) closeImageViewer();
+  });
+  document.addEventListener('keydown', event => {
+    if (viewer.classList.contains('hidden')) return;
+    if (event.key === 'Escape') closeImageViewer();
+    if (event.key === 'ArrowLeft') imageViewerStep(-1);
+    if (event.key === 'ArrowRight') imageViewerStep(1);
+  });
+  return viewer;
+}
+
+const imageViewerState = { images: [], index: 0, title: '' };
+
+function renderImageViewer() {
+  const viewer = ensureImageViewer();
+  const image = viewer.querySelector('[data-image-viewer-img]');
+  const counter = viewer.querySelector('[data-image-viewer-counter]');
+  const url = imageViewerState.images[imageViewerState.index] || '';
+  image.src = url;
+  image.alt = `${imageViewerState.title || '行程图片'} ${imageViewerState.index + 1}`;
+  counter.textContent = `${imageViewerState.index + 1} / ${imageViewerState.images.length}`;
+  viewer.querySelector('[data-image-viewer-prev]').classList.toggle('hidden', imageViewerState.images.length <= 1);
+  viewer.querySelector('[data-image-viewer-next]').classList.toggle('hidden', imageViewerState.images.length <= 1);
+}
+
+function imageViewerStep(delta) {
+  const total = imageViewerState.images.length;
+  if (total <= 1) return;
+  imageViewerState.index = (imageViewerState.index + delta + total) % total;
+  renderImageViewer();
+}
+
+function openImageViewer(images, index = 0, title = '') {
+  imageViewerState.images = Array.isArray(images) ? images.filter(Boolean) : [];
+  if (!imageViewerState.images.length) return;
+  imageViewerState.index = Math.max(0, Math.min(Number(index) || 0, imageViewerState.images.length - 1));
+  imageViewerState.title = title || '';
+  const viewer = ensureImageViewer();
+  viewer.classList.remove('hidden');
+  document.body.classList.add('image-viewer-open');
+  renderImageViewer();
+
+  const stage = viewer.querySelector('[data-image-viewer-stage]');
+  let startX = null;
+  stage.onpointerdown = event => {
+    startX = event.clientX;
+    try { stage.setPointerCapture?.(event.pointerId); } catch {}
+  };
+  stage.onpointerup = event => {
+    if (startX === null) return;
+    const delta = event.clientX - startX;
+    startX = null;
+    if (Math.abs(delta) >= 45) imageViewerStep(delta > 0 ? -1 : 1);
+  };
+  viewer.querySelector('[data-image-viewer-prev]').onclick = () => imageViewerStep(-1);
+  viewer.querySelector('[data-image-viewer-next]').onclick = () => imageViewerStep(1);
+}
+
+function closeImageViewer() {
+  document.querySelector('#image-viewer')?.classList.add('hidden');
+  document.body.classList.remove('image-viewer-open');
+}
+
+function bindImageViewerActions() {
+  el.main.querySelectorAll('[data-gallery-item]').forEach(button => {
+    button.addEventListener('click', () => {
+      const item = tripItemById(button.dataset.galleryItem);
+      if (!item) return;
+      openImageViewer(item.image_urls || [], Number(button.dataset.galleryIndex || 0), item.title || '');
     });
   });
 }
