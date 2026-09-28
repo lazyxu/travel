@@ -247,8 +247,8 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
           <label class="field"><span>退房日期</span><input name="checkOutDate" type="date" value="${attr(details.checkOutDate || '')}" /></label>
           <label class="field"><span>退房时间</span><input name="checkOutTime" type="time" value="${attr(details.checkOutTime || '')}" /></label>
         </div>
-        <details class="structured-more">
-          <summary><span>更多信息</span><small>${moreCount ? `已填写 ${moreCount} 项` : '房型、确认号、电话'}</small></summary>
+        <details class="structured-more" data-structured-more data-more-fields="roomType,confirmationNo,phone" data-empty-summary="房型、确认号、电话">
+          <summary><span>更多信息</span><small data-more-summary>${moreCount ? `已填写 ${moreCount} 项` : '房型、确认号、电话'}</small></summary>
           <div class="structured-more-body">
             <label class="field"><span>房型</span><input name="roomType" maxlength="160" value="${attr(details.roomType || '')}" /></label>
             <div class="field-grid">
@@ -286,8 +286,8 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
           <label class="field"><span>到达时间</span><input name="arrivalTime" type="time" value="${attr(details.arrivalTime || '')}" /></label>
         </div>
         <label class="field"><span>到达机场</span><input name="arrivalAirport" maxlength="160" value="${attr(details.arrivalAirport || '')}" /></label>
-        <details class="structured-more">
-          <summary><span>更多信息</span><small>${moreCount ? `已填写 ${moreCount} 项` : '航站楼、座位、确认号'}</small></summary>
+        <details class="structured-more" data-structured-more data-more-fields="departureTerminal,arrivalTerminal,seat,confirmationNo" data-empty-summary="航站楼、座位、确认号">
+          <summary><span>更多信息</span><small data-more-summary>${moreCount ? `已填写 ${moreCount} 项` : '航站楼、座位、确认号'}</small></summary>
           <div class="structured-more-body">
             <div class="field-grid">
               <label class="field"><span>出发航站楼</span><input name="departureTerminal" maxlength="80" value="${attr(details.departureTerminal || '')}" /></label>
@@ -340,8 +340,8 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
         <label class="field"><span>到达时间</span><input name="arrivalTime" type="time" value="${attr(details.arrivalTime || '')}" /></label>
       </div>
       <label class="field"><span>到达站</span><input name="arrivalStation" maxlength="160" value="${attr(details.arrivalStation || '')}" /></label>
-      <details class="structured-more">
-        <summary><span>更多信息</span><small>${moreCount ? `已填写 ${moreCount} 项` : '车厢、座位、确认号'}</small></summary>
+      <details class="structured-more" data-structured-more data-more-fields="carriage,seat,confirmationNo" data-empty-summary="车厢、座位、确认号">
+        <summary><span>更多信息</span><small data-more-summary>${moreCount ? `已填写 ${moreCount} 项` : '车厢、座位、确认号'}</small></summary>
         <div class="structured-more-body">
           <div class="field-grid">
             <label class="field"><span>车厢</span><input name="carriage" maxlength="40" value="${attr(details.carriage || '')}" /></label>
@@ -992,6 +992,15 @@ function updateCompactItemAddon(mainForm, id, summary, active, action) {
   if (button && action) button.textContent = action;
 }
 
+function refreshStructuredMoreSummary(root) {
+  root.querySelectorAll('[data-structured-more]').forEach(group => {
+    const fields = String(group.dataset.moreFields || '').split(',').map(value => value.trim()).filter(Boolean);
+    const count = fields.filter(name => String(root.querySelector(`[name="${name}"]`)?.value || '').trim()).length;
+    const summary = group.querySelector('[data-more-summary]');
+    if (summary) summary.textContent = count ? `已填写 ${count} 项` : (group.dataset.emptySummary || '更多信息');
+  });
+}
+
 function bindCompactItemEditor(mainForm, item) {
   const typeSelect = mainForm.querySelector('[name="itemType"]');
   const detailsInput = mainForm.querySelector('[name="detailsJson"]');
@@ -1059,6 +1068,9 @@ function bindCompactItemEditor(mainForm, item) {
           closeItemSubsheet(true);
         });
 
+        refreshStructuredMoreSummary(detailSubForm);
+        detailSubForm.addEventListener('input', () => refreshStructuredMoreSummary(detailSubForm));
+
         if (meta.kind === 'dining') {
           bindDiningCandidateManager(detailSubForm);
         }
@@ -1077,6 +1089,7 @@ function bindCompactItemEditor(mainForm, item) {
                   const input = detailSubForm.querySelector(`[name="${key}"]`);
                   if (input && value !== undefined && value !== null && String(value) !== '') input.value = value;
                 }
+                refreshStructuredMoreSummary(detailSubForm);
                 detailSubForm.dataset.dirty = '1';
               }
             });
