@@ -1654,3 +1654,106 @@ textarea {
   color: var(--accent);
   font-weight: 750;
 }
+
+
+/* 2026-09-28 UI polish: structured travel detail forms */
+.structured-import-button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 38px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid #c7ddd6;
+  border-radius: 15px;
+  background: #f2f8f5;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.structured-import-button:active {
+  transform: scale(.995);
+  background: #eaf4f0;
+}
+.structured-import-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--accent-2);
+  font-size: 18px;
+}
+.structured-import-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.structured-import-copy strong {
+  font-size: 13px;
+}
+.structured-import-copy small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.structured-import-chevron {
+  color: var(--accent);
+  font-size: 22px;
+  line-height: 1;
+}
+.structured-more {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fafbf8;
+}
+.structured-more > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  list-style: none;
+  cursor: pointer;
+}
+.structured-more > summary::-webkit-details-marker {
+  display: none;
+}
+.structured-more > summary span {
+  font-size: 12px;
+  font-weight: 800;
+}
+.structured-more > summary small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.structured-more > summary::after {
+  content: '⌄';
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.structured-more[open] > summary::after {
+  transform: rotate(180deg);
+}
+.structured-more-body {
+  display: grid;
+  gap: 12px;
+  padding: 2px 12px 12px;
+  border-top: 1px solid #eceeea;
+}
+@media (hover: hover) {
+  .structured-import-button:hover {
+    border-color: #a9cec3;
+    background: #edf6f2;
+  }
+  .structured-more > summary:hover {
+    background: #f5f7f4;
+  }
+}

@@ -220,9 +220,14 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
     const bookingSummary = details.bookingUrl
       ? [details.bookingPlatform, '已添加预订链接'].filter(Boolean).join(' · ')
       : '可粘贴华住会、携程等预订链接自动分析';
+    const moreCount = [details.roomType, details.confirmationNo, details.phone].filter(Boolean).length;
     return `
       <div class="stack">
-        <button class="button ghost full structured-import-button" type="button" data-analyze-order>📋 粘贴酒店订单 / 确认短信自动解析</button>
+        <button class="structured-import-button" type="button" data-analyze-order>
+          <span class="structured-import-icon">📋</span>
+          <span class="structured-import-copy"><strong>从订单自动填充</strong><small>粘贴酒店订单或确认短信</small></span>
+          <span class="structured-import-chevron">›</span>
+        </button>
         <label class="field"><span>酒店名称</span><input name="hotelName" maxlength="160" value="${attr(details.hotelName || '')}" /></label>
         <div class="booking-analysis-card ${details.bookingUrl ? 'active' : ''}">
           <div class="item-addon-icon">🔗</div>
@@ -242,11 +247,16 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
           <label class="field"><span>退房日期</span><input name="checkOutDate" type="date" value="${attr(details.checkOutDate || '')}" /></label>
           <label class="field"><span>退房时间</span><input name="checkOutTime" type="time" value="${attr(details.checkOutTime || '')}" /></label>
         </div>
-        <label class="field"><span>房型</span><input name="roomType" maxlength="160" value="${attr(details.roomType || '')}" /></label>
-        <div class="field-grid">
-          <label class="field"><span>确认号</span><input name="confirmationNo" maxlength="160" value="${attr(details.confirmationNo || '')}" /></label>
-          <label class="field"><span>酒店电话</span><input name="phone" maxlength="160" value="${attr(details.phone || '')}" /></label>
-        </div>
+        <details class="structured-more">
+          <summary><span>更多信息</span><small>${moreCount ? `已填写 ${moreCount} 项` : '房型、确认号、电话'}</small></summary>
+          <div class="structured-more-body">
+            <label class="field"><span>房型</span><input name="roomType" maxlength="160" value="${attr(details.roomType || '')}" /></label>
+            <div class="field-grid">
+              <label class="field"><span>确认号</span><input name="confirmationNo" maxlength="160" value="${attr(details.confirmationNo || '')}" /></label>
+              <label class="field"><span>酒店电话</span><input name="phone" maxlength="160" value="${attr(details.phone || '')}" /></label>
+            </div>
+          </div>
+        </details>
         <p class="form-help">跨天酒店会自动成为住宿期间每天早上的第一站和晚上的最后一站。</p>
         <button class="button primary full" type="submit">完成</button>
       </div>
@@ -254,9 +264,14 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
   }
 
   if (kind === 'flight') {
+    const moreCount = [details.departureTerminal, details.arrivalTerminal, details.seat, details.confirmationNo].filter(Boolean).length;
     return `
       <div class="stack">
-        <button class="button ghost full structured-import-button" type="button" data-analyze-order>📋 粘贴航班订单 / 确认短信自动解析</button>
+        <button class="structured-import-button" type="button" data-analyze-order>
+          <span class="structured-import-icon">📋</span>
+          <span class="structured-import-copy"><strong>从订单自动填充</strong><small>粘贴航班订单或确认短信</small></span>
+          <span class="structured-import-chevron">›</span>
+        </button>
         <div class="field-grid">
           <label class="field"><span>航空公司</span><input name="airline" maxlength="160" value="${attr(details.airline || '')}" /></label>
           <label class="field"><span>航班号</span><input name="flightNo" maxlength="40" value="${attr(details.flightNo || '')}" /></label>
@@ -265,22 +280,25 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
           <label class="field"><span>出发日期</span><input name="departureDate" type="date" value="${attr(details.departureDate || '')}" /></label>
           <label class="field"><span>出发时间</span><input name="departureTime" type="time" value="${attr(details.departureTime || '')}" /></label>
         </div>
-        <div class="field-grid">
-          <label class="field"><span>出发机场</span><input name="departureAirport" maxlength="160" value="${attr(details.departureAirport || '')}" /></label>
-          <label class="field"><span>航站楼</span><input name="departureTerminal" maxlength="80" value="${attr(details.departureTerminal || '')}" /></label>
-        </div>
+        <label class="field"><span>出发机场</span><input name="departureAirport" maxlength="160" value="${attr(details.departureAirport || '')}" /></label>
         <div class="field-grid">
           <label class="field"><span>到达日期</span><input name="arrivalDate" type="date" value="${attr(details.arrivalDate || '')}" /></label>
           <label class="field"><span>到达时间</span><input name="arrivalTime" type="time" value="${attr(details.arrivalTime || '')}" /></label>
         </div>
-        <div class="field-grid">
-          <label class="field"><span>到达机场</span><input name="arrivalAirport" maxlength="160" value="${attr(details.arrivalAirport || '')}" /></label>
-          <label class="field"><span>航站楼</span><input name="arrivalTerminal" maxlength="80" value="${attr(details.arrivalTerminal || '')}" /></label>
-        </div>
-        <div class="field-grid">
-          <label class="field"><span>座位</span><input name="seat" maxlength="40" value="${attr(details.seat || '')}" /></label>
-          <label class="field"><span>确认号</span><input name="confirmationNo" maxlength="160" value="${attr(details.confirmationNo || '')}" /></label>
-        </div>
+        <label class="field"><span>到达机场</span><input name="arrivalAirport" maxlength="160" value="${attr(details.arrivalAirport || '')}" /></label>
+        <details class="structured-more">
+          <summary><span>更多信息</span><small>${moreCount ? `已填写 ${moreCount} 项` : '航站楼、座位、确认号'}</small></summary>
+          <div class="structured-more-body">
+            <div class="field-grid">
+              <label class="field"><span>出发航站楼</span><input name="departureTerminal" maxlength="80" value="${attr(details.departureTerminal || '')}" /></label>
+              <label class="field"><span>到达航站楼</span><input name="arrivalTerminal" maxlength="80" value="${attr(details.arrivalTerminal || '')}" /></label>
+            </div>
+            <div class="field-grid">
+              <label class="field"><span>座位</span><input name="seat" maxlength="40" value="${attr(details.seat || '')}" /></label>
+              <label class="field"><span>确认号</span><input name="confirmationNo" maxlength="160" value="${attr(details.confirmationNo || '')}" /></label>
+            </div>
+          </div>
+        </details>
         <button class="button primary full" type="submit">完成</button>
       </div>
     `;
@@ -303,9 +321,14 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
     `;
   }
 
+  const moreCount = [details.carriage, details.seat, details.confirmationNo].filter(Boolean).length;
   return `
     <div class="stack">
-      <button class="button ghost full structured-import-button" type="button" data-analyze-order>📋 粘贴高铁 / 火车订单或短信自动解析</button>
+      <button class="structured-import-button" type="button" data-analyze-order>
+        <span class="structured-import-icon">📋</span>
+        <span class="structured-import-copy"><strong>从订单自动填充</strong><small>粘贴高铁 / 火车订单或确认短信</small></span>
+        <span class="structured-import-chevron">›</span>
+      </button>
       <label class="field"><span>车次</span><input name="trainNo" maxlength="40" value="${attr(details.trainNo || '')}" /></label>
       <div class="field-grid">
         <label class="field"><span>出发日期</span><input name="departureDate" type="date" value="${attr(details.departureDate || '')}" /></label>
@@ -317,11 +340,16 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
         <label class="field"><span>到达时间</span><input name="arrivalTime" type="time" value="${attr(details.arrivalTime || '')}" /></label>
       </div>
       <label class="field"><span>到达站</span><input name="arrivalStation" maxlength="160" value="${attr(details.arrivalStation || '')}" /></label>
-      <div class="field-grid">
-        <label class="field"><span>车厢</span><input name="carriage" maxlength="40" value="${attr(details.carriage || '')}" /></label>
-        <label class="field"><span>座位</span><input name="seat" maxlength="40" value="${attr(details.seat || '')}" /></label>
-      </div>
-      <label class="field"><span>订单 / 确认号</span><input name="confirmationNo" maxlength="160" value="${attr(details.confirmationNo || '')}" /></label>
+      <details class="structured-more">
+        <summary><span>更多信息</span><small>${moreCount ? `已填写 ${moreCount} 项` : '车厢、座位、确认号'}</small></summary>
+        <div class="structured-more-body">
+          <div class="field-grid">
+            <label class="field"><span>车厢</span><input name="carriage" maxlength="40" value="${attr(details.carriage || '')}" /></label>
+            <label class="field"><span>座位</span><input name="seat" maxlength="40" value="${attr(details.seat || '')}" /></label>
+          </div>
+          <label class="field"><span>订单 / 确认号</span><input name="confirmationNo" maxlength="160" value="${attr(details.confirmationNo || '')}" /></label>
+        </div>
+      </details>
       <button class="button primary full" type="submit">完成</button>
     </div>
   `;
