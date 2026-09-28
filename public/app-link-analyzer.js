@@ -226,6 +226,7 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
       form.dataset.hasAnalysis = '0';
       actionBox.classList.add('hidden');
       status.textContent = error.message;
+      showFormError(form, error.message);
       showToast(error.message, 'error');
     } finally {
       setButtonBusy(analyzeButton, false);
@@ -239,6 +240,7 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
     }, 0);
   });
   valueInput.addEventListener('input', () => {
+    clearFormError(form);
     if (form.dataset.hasAnalysis === '1') status.textContent = '链接已修改，请重新分析';
   });
   form.addEventListener('input', event => {
@@ -308,6 +310,7 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
       closeLinkAnalyzer(true);
     } catch (error) {
       setButtonBusy(submit, false);
+      showFormError(form, error.message);
       showToast(error.message, 'error');
     }
   };

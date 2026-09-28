@@ -179,7 +179,10 @@ function openItemSubsheet(title, body, onSubmit) {
   document.querySelector('#item-subsheet-title').textContent = title;
   form.innerHTML = body;
   form.dataset.dirty = '0';
-  form.oninput = () => { form.dataset.dirty = '1'; };
+  form.oninput = () => {
+    form.dataset.dirty = '1';
+    clearFormError(form);
+  };
   form.onchange = () => { form.dataset.dirty = '1'; };
   form.onsubmit = async event => {
     event.preventDefault();
@@ -188,8 +191,9 @@ function openItemSubsheet(title, body, onSubmit) {
     try {
       await onSubmit(new FormData(form), form);
     } catch (error) {
-      showToast(error.message, 'error');
       setButtonBusy(submit, false);
+      showFormError(form, error.message);
+      showToast(error.message, 'error');
     }
   };
   document.querySelector('#item-subsheet-backdrop').classList.remove('hidden');

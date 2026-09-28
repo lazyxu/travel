@@ -1010,6 +1010,21 @@ window.addEventListener('beforeunload', event => {
   event.returnValue = '';
 });
 
+function clearFormError(form) {
+  form?.querySelector('[data-form-error]')?.remove();
+}
+
+function showFormError(form, message) {
+  if (!form) return;
+  clearFormError(form);
+  const box = document.createElement('div');
+  box.className = 'form-error';
+  box.dataset.formError = '1';
+  box.setAttribute('role', 'alert');
+  box.textContent = String(message || '操作失败，请重试');
+  form.prepend(box);
+}
+
 function busyButtonLabel(button) {
   const explicit = button?.dataset?.busyLabel;
   if (explicit) return explicit;
@@ -1047,6 +1062,7 @@ function openSheet(title, body, onSubmit) {
   el.sheetForm.innerHTML = body;
   el.sheetForm.dataset.initialSnapshot = formSnapshot(el.sheetForm);
   el.sheetForm.dataset.submitting = '0';
+  el.sheetForm.addEventListener('input', () => clearFormError(el.sheetForm), { once: true });
 
   el.sheetForm.onsubmit = async event => {
     event.preventDefault();
@@ -1058,6 +1074,7 @@ function openSheet(title, body, onSubmit) {
     } catch (error) {
       el.sheetForm.dataset.submitting = '0';
       setButtonBusy(submit, false);
+      showFormError(el.sheetForm, error.message);
       showToast(error.message, 'error');
     }
   };

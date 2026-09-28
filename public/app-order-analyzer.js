@@ -111,6 +111,7 @@ function openOrderAnalyzer({ kind, anchorDate = '', title = '解析订单文本'
       status.textContent = result.confidence === 'high' ? '识别结果较完整，请确认后应用' : result.confidence === 'medium' ? '已识别部分字段，请补充后应用' : '只识别到少量字段，请手动补充';
     } catch (error) {
       status.textContent = error.message;
+      showFormError(form, error.message);
       showToast(error.message, 'error');
     } finally {
       setButtonBusy(analyzeButton, false);
@@ -119,7 +120,10 @@ function openOrderAnalyzer({ kind, anchorDate = '', title = '解析订单文本'
 
   analyzeButton.addEventListener('click', run);
   textInput.addEventListener('paste', () => setTimeout(() => { if (textInput.value.trim()) run(); }, 0));
-  form.addEventListener('input', event => { if (event.target !== textInput) form.dataset.dirty = '1'; });
+  form.addEventListener('input', event => {
+    clearFormError(form);
+    if (event.target !== textInput) form.dataset.dirty = '1';
+  });
   form.onsubmit = async event => {
     event.preventDefault();
     const submit = event.submitter || form.querySelector('[type="submit"]');
@@ -131,6 +135,7 @@ function openOrderAnalyzer({ kind, anchorDate = '', title = '解析订单文本'
       closeOrderAnalyzer(true);
     } catch (error) {
       setButtonBusy(submit, false);
+      showFormError(form, error.message);
       showToast(error.message, 'error');
     }
   };

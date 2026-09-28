@@ -2770,3 +2770,15 @@ body.dialog-open{
   background: #eef7f3;
   color: var(--accent);
 }
+
+
+/* Persistent form errors */
+.form-error{
+  padding: 9px 11px;
+  border: 1px solid #efd0cc;
+  border-radius: var(--radius-sm);
+  background: #fff5f3;
+  color: #973b34;
+  font-size: var(--font-meta);
+  line-height: 1.45;
+}
