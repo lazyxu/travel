@@ -93,42 +93,67 @@ function showToast(message, type = 'info') {
   showToast.timer = setTimeout(() => { el.toast.className = 'toast'; }, 2600);
 }
 
+const networkActivity = { count: 0, timer: null };
+
+function beginNetworkActivity() {
+  networkActivity.count += 1;
+  if (networkActivity.count !== 1) return;
+  clearTimeout(networkActivity.timer);
+  networkActivity.timer = setTimeout(() => {
+    if (networkActivity.count <= 0) return;
+    document.querySelector('#network-progress')?.classList.add('show');
+  }, 180);
+}
+
+function endNetworkActivity() {
+  networkActivity.count = Math.max(0, networkActivity.count - 1);
+  if (networkActivity.count > 0) return;
+  clearTimeout(networkActivity.timer);
+  networkActivity.timer = null;
+  document.querySelector('#network-progress')?.classList.remove('show');
+}
+
 async function api(url, options = {}) {
+  beginNetworkActivity();
   const controller = options.signal ? null : new AbortController();
   const timeout = controller ? setTimeout(() => controller.abort(), 30000) : null;
-  let response;
+
   try {
-    response = await fetch(url, {
-      ...options,
-      ...(controller ? { signal: controller.signal } : {}),
-      headers: {
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.headers || {})
+    let response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        ...(controller ? { signal: controller.signal } : {}),
+        headers: {
+          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(options.headers || {})
+        }
+      });
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error('请求超时，请稍后重试');
+      if (error instanceof TypeError) throw new Error('网络连接失败，请检查网络后重试');
+      throw error;
+    }
+
+    let payload = null;
+    if (response.status !== 204) {
+      const text = await response.text();
+      if (text) {
+        try { payload = JSON.parse(text); } catch { payload = { error: text }; }
       }
-    });
-  } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('请求超时，请稍后重试');
-    if (error instanceof TypeError) throw new Error('网络连接失败，请检查网络后重试');
-    throw error;
+    }
+    if (!response.ok) {
+      if (response.status === 401 && url !== '/api/login') showLogin();
+      const error = new Error(payload?.error || `请求失败 (${response.status})`);
+      error.status = response.status;
+      error.details = payload?.details;
+      throw error;
+    }
+    return payload;
   } finally {
     if (timeout) clearTimeout(timeout);
+    endNetworkActivity();
   }
-
-  let payload = null;
-  if (response.status !== 204) {
-    const text = await response.text();
-    if (text) {
-      try { payload = JSON.parse(text); } catch { payload = { error: text }; }
-    }
-  }
-  if (!response.ok) {
-    if (response.status === 401 && url !== '/api/login') showLogin();
-    const error = new Error(payload?.error || `请求失败 (${response.status})`);
-    error.status = response.status;
-    error.details = payload?.details;
-    throw error;
-  }
-  return payload;
 }
 
 function showLogin() {
