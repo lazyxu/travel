@@ -1,0 +1,58 @@
+name: travel
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "${TRAVEL_LOG_MAX_SIZE:-10m}"
+    max-file: "${TRAVEL_LOG_MAX_FILES:-5}"
+
+services:
+  postgres:
+    image: ${TRAVEL_POSTGRES_IMAGE:-postgres:17-alpine}
+    container_name: travel-postgres
+    environment:
+      POSTGRES_USER: travel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in ~/.travel/config/.env}
+      POSTGRES_DB: travel
+    volumes:
+      - "${TRAVEL_POSTGRES_DATA_DIR:-../data/postgres}:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U travel -d travel"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: ${TRAVEL_POSTGRES_MEMORY_LIMIT:-512m}
+    cpus: ${TRAVEL_POSTGRES_CPU_LIMIT:-0.75}
+    pids_limit: ${TRAVEL_POSTGRES_PIDS_LIMIT:-256}
+
+  app:
+    image: ${TRAVEL_IMAGE:-ghcr.io/lazyxu/travel:master}
+    container_name: travel-app
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://travel:${POSTGRES_PASSWORD}@postgres:5432/travel
+      TRAVEL_ADMIN_PASSWORD: ${TRAVEL_ADMIN_PASSWORD:?set TRAVEL_ADMIN_PASSWORD in ~/.travel/config/.env}
+      TRAVEL_SESSION_SECRET: ${TRAVEL_SESSION_SECRET:?set TRAVEL_SESSION_SECRET in ~/.travel/config/.env}
+      TRAVEL_COOKIE_SECURE: ${TRAVEL_COOKIE_SECURE:-0}
+      TRAVEL_AUTH_DISABLED: ${TRAVEL_AUTH_DISABLED:-0}
+      TRAVEL_VERSION: ${TRAVEL_VERSION:-master}
+      DB_POOL_MAX: ${TRAVEL_DB_POOL_MAX:-10}
+    ports:
+      - "${TRAVEL_BIND:-0.0.0.0}:${TRAVEL_PORT:-3080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: ${TRAVEL_APP_MEMORY_LIMIT:-512m}
+    cpus: ${TRAVEL_APP_CPU_LIMIT:-1.0}
+    pids_limit: ${TRAVEL_APP_PIDS_LIMIT:-256}
