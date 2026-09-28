@@ -239,16 +239,34 @@ function openTodoForm(todo = null) {
   });
 
   const dueInput = el.sheetForm.querySelector('[name="dueDate"]');
+  const tripStart = String(state.current?.trip?.start_date || '').slice(0, 10);
+  const syncTodoDateButtons = () => {
+    const value = dueInput?.value || '';
+    el.sheetForm.querySelectorAll('[data-todo-date]').forEach(button => {
+      const action = button.dataset.todoDate;
+      const active = action === 'today'
+        ? value === localDateKey()
+        : action === 'trip-start'
+          ? Boolean(tripStart) && value === tripStart
+          : action === 'clear'
+            ? !value
+            : false;
+      button.classList.toggle('active', active);
+    });
+  };
+
   el.sheetForm.querySelectorAll('[data-todo-date]').forEach(button => {
     button.addEventListener('click', () => {
       if (!dueInput) return;
       const action = button.dataset.todoDate;
       if (action === 'today') dueInput.value = localDateKey();
-      if (action === 'trip-start') dueInput.value = String(state.current?.trip?.start_date || '').slice(0, 10);
+      if (action === 'trip-start') dueInput.value = tripStart;
       if (action === 'clear') dueInput.value = '';
       dueInput.dispatchEvent(new Event('change', { bubbles: true }));
     });
   });
+  dueInput?.addEventListener('change', syncTodoDateButtons);
+  syncTodoDateButtons();
 
   if (todo) {
     el.sheetForm.querySelector('#delete-todo').addEventListener('click', async event => {

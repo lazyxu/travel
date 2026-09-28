@@ -2762,3 +2762,11 @@ body.dialog-open{
   font-size: var(--font-caption);
   line-height: 1.35;
 }
+
+
+/* Quick-date selected state */
+.date-quick-button.active{
+  border-color: #b9d5cd;
+  background: #eef7f3;
+  color: var(--accent);
+}

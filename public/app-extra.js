@@ -427,7 +427,7 @@ async function openShareManager() {
 
     el.sheetForm.querySelector('#create-share-link')?.addEventListener('click', async event => {
       const button = event.currentTarget;
-      button.disabled = true;
+      setButtonBusy(button, true, current ? '重新生成中…' : '生成中…');
       try {
         const created = await api(`/api/trips/${tripId}/shares`, {
           method: 'POST',
@@ -441,18 +441,30 @@ async function openShareManager() {
             <input readonly value="${attr(url)}" />
             <button id="copy-share-link" class="button ghost small" type="button">复制</button>
           </div>
-          <div class="share-created-help">请现在复制保存。再次打开分享设置时不会显示明文 token。</div>
+          <div class="share-created-help">请现在保存这个链接。再次打开分享设置时不会显示明文 token。</div>
         `;
-        result.querySelector('#copy-share-link')?.addEventListener('click', async () => {
-          await copyText(url);
-          showToast('分享链接已复制');
+
+        const copyButton = result.querySelector('#copy-share-link');
+        copyButton?.addEventListener('click', async () => {
+          try {
+            await copyText(url);
+            showToast('分享链接已复制');
+          } catch {
+            showToast('自动复制失败，请长按或手动复制链接', 'error');
+          }
         });
-        button.textContent = '重新生成分享链接';
-        showToast('新的只读分享链接已生成');
+
+        let copied = false;
+        try {
+          await copyText(url);
+          copied = true;
+        } catch {}
+        showToast(copied ? '分享链接已生成并复制' : '分享链接已生成，请点击复制');
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
-        button.disabled = false;
+        setButtonBusy(button, false);
+        button.textContent = current ? '重新生成分享链接' : '生成只读分享链接';
       }
     });
   } catch (error) {
