@@ -201,8 +201,7 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
   const runAnalysis = async () => {
     const value = valueInput.value.trim();
     if (!value) return showToast('请先粘贴链接', 'error');
-    analyzeButton.disabled = true;
-    analyzeButton.textContent = '分析中…';
+    setButtonBusy(analyzeButton, true, '分析中…');
     status.textContent = '正在识别平台和内容…';
     try {
       const result = await api('/api/links/analyze', {
@@ -229,8 +228,7 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
       status.textContent = error.message;
       showToast(error.message, 'error');
     } finally {
-      analyzeButton.disabled = false;
-      analyzeButton.textContent = '分析';
+      setButtonBusy(analyzeButton, false);
     }
   };
 
@@ -250,6 +248,8 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
   form.onsubmit = async event => {
     event.preventDefault();
     if (form.dataset.hasAnalysis !== '1') return runAnalysis();
+    const submit = event.submitter || form.querySelector('[type="submit"]');
+    setButtonBusy(submit, true, '应用中…');
     const data = new FormData(form);
     const type = String(data.get('analysisType') || 'reference');
     const value = valueInput.value.trim();
@@ -303,8 +303,13 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
       };
     }
 
-    await onApply?.(result);
-    closeLinkAnalyzer(true);
+    try {
+      await onApply?.(result);
+      closeLinkAnalyzer(true);
+    } catch (error) {
+      setButtonBusy(submit, false);
+      showToast(error.message, 'error');
+    }
   };
 
   document.querySelector('#link-analyzer-backdrop').classList.remove('hidden');

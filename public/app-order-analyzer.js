@@ -96,8 +96,7 @@ function openOrderAnalyzer({ kind, anchorDate = '', title = '解析订单文本'
   const run = async () => {
     const text = textInput.value.trim();
     if (!text) return showToast('请先粘贴订单或短信内容', 'error');
-    analyzeButton.disabled = true;
-    analyzeButton.textContent = '解析中…';
+    setButtonBusy(analyzeButton, true, '解析中…');
     status.textContent = '正在提取结构化字段…';
     try {
       const result = await api('/api/orders/analyze', {
@@ -114,8 +113,7 @@ function openOrderAnalyzer({ kind, anchorDate = '', title = '解析订单文本'
       status.textContent = error.message;
       showToast(error.message, 'error');
     } finally {
-      analyzeButton.disabled = false;
-      analyzeButton.textContent = '自动解析';
+      setButtonBusy(analyzeButton, false);
     }
   };
 
@@ -124,10 +122,17 @@ function openOrderAnalyzer({ kind, anchorDate = '', title = '解析订单文本'
   form.addEventListener('input', event => { if (event.target !== textInput) form.dataset.dirty = '1'; });
   form.onsubmit = async event => {
     event.preventDefault();
+    const submit = event.submitter || form.querySelector('[type="submit"]');
+    setButtonBusy(submit, true, '应用中…');
     const parsedKind = form.dataset.parsedKind || kind;
     const details = collectOrderResult(form, parsedKind);
-    await onApply?.(details);
-    closeOrderAnalyzer(true);
+    try {
+      await onApply?.(details);
+      closeOrderAnalyzer(true);
+    } catch (error) {
+      setButtonBusy(submit, false);
+      showToast(error.message, 'error');
+    }
   };
 
   document.querySelector('#order-analyzer-backdrop').classList.remove('hidden');

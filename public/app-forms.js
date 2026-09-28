@@ -61,17 +61,20 @@ function openTripForm(trip = null) {
   };
   startInput?.addEventListener('change', syncTripDates);
   syncTripDates();
+  el.sheetForm.dataset.initialSnapshot = formSnapshot(el.sheetForm);
 
   if (trip) {
     el.sheetForm.querySelector('#delete-trip').addEventListener('click', async event => {
-      if (!confirm(`确定删除“${trip.title}”及全部行程和待办吗？`)) return;
+      if (!confirm(`确定删除“${trip.title}”及全部行程和待办吗？此操作不可恢复。`)) return;
+      const button = event.currentTarget;
+      setButtonBusy(button, true, '删除中…');
       try {
         await api(`/api/trips/${trip.id}`, { method: 'DELETE' });
-        setButtonBusy(event.currentTarget, true, '删除中…');
         closeSheet(true);
         await navigate('/');
         showToast('旅行已删除');
       } catch (error) {
+        setButtonBusy(button, false);
         showToast(error.message, 'error');
       }
     });
@@ -172,14 +175,16 @@ function openExpenseForm(expense = null, linkedItem = null) {
 
   if (expense) {
     el.sheetForm.querySelector('#delete-expense').addEventListener('click', async event => {
-      if (!confirm(`确定删除“${expense.title}”吗？`)) return;
+      if (!confirm(`确定删除“${expense.title}”吗？此操作不可恢复。`)) return;
+      const button = event.currentTarget;
+      setButtonBusy(button, true, '删除中…');
       try {
         await api(`/api/expenses/${expense.id}`, { method: 'DELETE' });
-        setButtonBusy(event.currentTarget, true, '删除中…');
         closeSheet(true);
         await refreshCurrent();
         showToast('费用已删除');
       } catch (error) {
+        setButtonBusy(button, false);
         showToast(error.message, 'error');
       }
     });
@@ -216,14 +221,18 @@ function openTodoForm(todo = null) {
   });
   if (todo) {
     el.sheetForm.querySelector('#delete-todo').addEventListener('click', async event => {
-      if (!confirm(`确定删除“${todo.title}”吗？`)) return;
+      if (!confirm(`确定删除“${todo.title}”吗？此操作不可恢复。`)) return;
+      const button = event.currentTarget;
+      setButtonBusy(button, true, '删除中…');
       try {
         await api(`/api/todos/${todo.id}`, { method: 'DELETE' });
-        setButtonBusy(event.currentTarget, true, '删除中…');
         closeSheet(true);
         await refreshCurrent();
         showToast('待办已删除');
-      } catch (error) { showToast(error.message, 'error'); }
+      } catch (error) {
+        setButtonBusy(button, false);
+        showToast(error.message, 'error');
+      }
     });
   }
 }

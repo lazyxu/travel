@@ -183,13 +183,13 @@ function openItemSubsheet(title, body, onSubmit) {
   form.onchange = () => { form.dataset.dirty = '1'; };
   form.onsubmit = async event => {
     event.preventDefault();
-    const submit = form.querySelector('[type="submit"]');
-    if (submit) submit.disabled = true;
+    const submit = event.submitter || form.querySelector('[type="submit"]');
+    setButtonBusy(submit, true);
     try {
       await onSubmit(new FormData(form), form);
     } catch (error) {
       showToast(error.message, 'error');
-      if (submit) submit.disabled = false;
+      setButtonBusy(submit, false);
     }
   };
   document.querySelector('#item-subsheet-backdrop').classList.remove('hidden');
@@ -1400,15 +1400,17 @@ function openItemForm(day, item = null) {
 
   if (item) {
     mainForm.querySelector('#delete-item')?.addEventListener('click', async event => {
-      if (!confirm(`确定删除“${item.title}”吗？`)) return;
+      if (!confirm(`确定删除“${item.title}”吗？此操作不可恢复。`)) return;
+      const button = event.currentTarget;
+      setButtonBusy(button, true, '删除中…');
       try {
-        setButtonBusy(event.currentTarget, true, '删除中…');
         await api(`/api/items/${item.id}`, { method: 'DELETE' });
         closeItemSubsheet(true);
         closeSheet(true);
         await refreshCurrent();
         showToast('行程已删除');
       } catch (error) {
+        setButtonBusy(button, false);
         showToast(error.message, 'error');
       }
     });
