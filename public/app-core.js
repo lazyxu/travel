@@ -1,3 +1,16 @@
+const CATEGORY_META = {
+  '交通': { icon: '🚆', label: '交通' },
+  '景点': { icon: '📍', label: '景点' },
+  '餐饮': { icon: '🍜', label: '餐饮' },
+  '住宿': { icon: '🏨', label: '住宿' },
+  '购物': { icon: '🛍️', label: '购物' },
+  '其他': { icon: '📝', label: '其他' }
+};
+
+function categoryMeta(category) {
+  return CATEGORY_META[category] || CATEGORY_META['其他'];
+}
+
 const state = {
   trips: [],
   current: null,
@@ -108,6 +121,21 @@ function extractUrl(value) {
   if (!text) return '';
   const match = text.match(/https?:\/\/[^\s]+/i);
   return (match?.[0] || text).replace(/[),，。；;]+$/g, '');
+}
+
+function extractUrls(value, maxItems = 12) {
+  const text = String(value || '').trim();
+  if (!text) return [];
+  const matches = text.match(/https?:\/\/[^\s]+/ig) || [];
+  const source = matches.length ? matches : text.split(/\r?\n/);
+  const urls = [];
+  for (const rawValue of source) {
+    const url = String(rawValue || '').trim().replace(/[),，。；;]+$/g, '');
+    if (!url || !/^https?:\/\//i.test(url) || urls.includes(url)) continue;
+    urls.push(url);
+    if (urls.length >= maxItems) break;
+  }
+  return urls;
 }
 
 function openSheet(title, body, onSubmit) {
