@@ -1062,7 +1062,7 @@ function openSheet(title, body, onSubmit) {
   el.sheetForm.innerHTML = body;
   el.sheetForm.dataset.initialSnapshot = formSnapshot(el.sheetForm);
   el.sheetForm.dataset.submitting = '0';
-  el.sheetForm.addEventListener('input', () => clearFormError(el.sheetForm), { once: true });
+  el.sheetForm.oninput = () => clearFormError(el.sheetForm);
 
   el.sheetForm.onsubmit = async event => {
     event.preventDefault();
@@ -1098,6 +1098,7 @@ function closeSheet(force = false) {
   el.sheetBackdrop.classList.add('hidden');
   el.sheetForm.innerHTML = '';
   el.sheetForm.onsubmit = null;
+  el.sheetForm.oninput = null;
   delete el.sheetForm.dataset.initialSnapshot;
   delete el.sheetForm.dataset.submitting;
   syncDialogBodyLock();
