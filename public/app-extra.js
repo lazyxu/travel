@@ -99,7 +99,7 @@ function tripExpenseSummaryHtml() {
 }
 
 async function bindDisclosureMenus(root = el.main) {
-  const menus = [...root.querySelectorAll('.item-action-menu, .leg-mode-menu, .day-action-menu')];
+  const menus = [...root.querySelectorAll('.item-action-menu, .leg-mode-menu, .day-action-menu, .trip-action-menu')];
   menus.forEach(menu => {
     menu.addEventListener('toggle', () => {
       if (!menu.open) return;
@@ -115,7 +115,7 @@ async function bindDisclosureMenus(root = el.main) {
   if (!root.dataset.disclosureOutsideBound) {
     root.dataset.disclosureOutsideBound = '1';
     root.addEventListener('click', event => {
-      root.querySelectorAll('.item-action-menu[open], .leg-mode-menu[open], .day-action-menu[open]').forEach(menu => {
+      root.querySelectorAll('.item-action-menu[open], .leg-mode-menu[open], .day-action-menu[open], .trip-action-menu[open]').forEach(menu => {
         if (!menu.contains(event.target)) menu.removeAttribute('open');
       });
     });

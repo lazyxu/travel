@@ -87,8 +87,13 @@ function heroHtml() {
         ${trip.notes ? `<div class="trip-summary-notes">${escapeHtml(trip.notes)}</div>` : ''}
       </div>
       <div class="trip-summary-actions">
-        <button id="share-trip" class="button ghost small" type="button">分享</button>
-        <button id="edit-trip" class="button ghost small" type="button">编辑</button>
+        <details class="item-action-menu trip-action-menu">
+          <summary class="card-more trip-more" aria-label="旅行更多操作">•••</summary>
+          <div class="item-action-popover">
+            <button id="share-trip" type="button">分享旅行</button>
+            <button id="edit-trip" type="button">编辑旅行</button>
+          </div>
+        </details>
       </div>
     </section>
   `;

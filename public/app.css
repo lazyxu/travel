@@ -2548,3 +2548,21 @@ body.dialog-open{
   font-size: var(--font-small);
   line-height: 1.5;
 }
+
+
+/* Compact trip actions */
+.trip-action-menu{
+  position: relative;
+}
+.trip-more{
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+.trip-action-menu[open] .trip-more{
+  border-color: #b9d5cd;
+  background: #f1f7f4;
+  color: var(--accent);
+}
