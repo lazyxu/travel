@@ -781,7 +781,16 @@ function registerPwa() {
       banner.classList.remove('hidden');
       button.disabled = false;
       button.textContent = '更新';
-      button.onclick = () => {
+      button.onclick = async () => {
+        if (hasUnsavedChanges()) {
+          const proceed = await confirmAction({
+            title: '更新应用？',
+            message: '更新会刷新页面，当前尚未保存的修改将丢失。',
+            confirmLabel: '更新并刷新',
+            danger: false
+          });
+          if (!proceed) return;
+        }
         button.disabled = true;
         button.textContent = '更新中…';
         worker.postMessage({ type: 'SKIP_WAITING' });
@@ -967,33 +976,116 @@ document.addEventListener('keydown', event => {
   }
 }, true);
 
+function formSnapshot(form) {
+  if (!form) return '';
+  const entries = [];
+  for (const [name, value] of new FormData(form).entries()) {
+    entries.push([name, typeof value === 'string' ? value : `${value.name}:${value.size}:${value.type}`]);
+  }
+  return JSON.stringify(entries);
+}
+
+function hasUnsavedChanges() {
+  if (!el.sheet.classList.contains('hidden')) {
+    const submitting = el.sheetForm.dataset.submitting === '1';
+    const initial = el.sheetForm.dataset.initialSnapshot || '';
+    if (!submitting && formSnapshot(el.sheetForm) !== initial) return true;
+  }
+
+  const dirtyDialogs = [
+    ['#item-subsheet', '#item-subsheet-form'],
+    ['#link-analyzer', '#link-analyzer-form'],
+    ['#order-analyzer', '#order-analyzer-form']
+  ];
+  return dirtyDialogs.some(([dialogSelector, formSelector]) => {
+    const dialog = document.querySelector(dialogSelector);
+    const form = document.querySelector(formSelector);
+    return Boolean(dialog && !dialog.classList.contains('hidden') && form?.dataset.dirty === '1');
+  });
+}
+
+window.addEventListener('beforeunload', event => {
+  if (!hasUnsavedChanges()) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
+function busyButtonLabel(button) {
+  const explicit = button?.dataset?.busyLabel;
+  if (explicit) return explicit;
+  const text = String(button?.textContent || '').trim();
+  if (text.includes('保存')) return '保存中…';
+  if (text.includes('完成')) return '处理中…';
+  if (text.includes('应用')) return '应用中…';
+  if (text.includes('生成')) return '生成中…';
+  if (text.includes('登录') || text.includes('进入')) return '登录中…';
+  return '处理中…';
+}
+
+function setButtonBusy(button, busy, label = '') {
+  if (!button) return;
+  if (busy) {
+    if (!Object.prototype.hasOwnProperty.call(button.dataset, 'idleLabel')) {
+      button.dataset.idleLabel = button.textContent || '';
+    }
+    button.disabled = true;
+    button.classList.add('is-busy');
+    button.textContent = label || busyButtonLabel(button);
+    return;
+  }
+
+  button.disabled = false;
+  button.classList.remove('is-busy');
+  if (Object.prototype.hasOwnProperty.call(button.dataset, 'idleLabel')) {
+    button.textContent = button.dataset.idleLabel;
+    delete button.dataset.idleLabel;
+  }
+}
+
 function openSheet(title, body, onSubmit) {
   el.sheetTitle.textContent = title;
   el.sheetForm.innerHTML = body;
+  el.sheetForm.dataset.initialSnapshot = formSnapshot(el.sheetForm);
+  el.sheetForm.dataset.submitting = '0';
+
   el.sheetForm.onsubmit = async event => {
     event.preventDefault();
-    const submit = el.sheetForm.querySelector('[type="submit"]');
-    if (submit) submit.disabled = true;
+    const submit = event.submitter || el.sheetForm.querySelector('[type="submit"]');
+    el.sheetForm.dataset.submitting = '1';
+    setButtonBusy(submit, true);
     try {
       await onSubmit(new FormData(el.sheetForm), event);
     } catch (error) {
+      el.sheetForm.dataset.submitting = '0';
+      setButtonBusy(submit, false);
       showToast(error.message, 'error');
-      if (submit) submit.disabled = false;
     }
   };
+
   el.sheetBackdrop.classList.remove('hidden');
   el.sheet.classList.remove('hidden');
   syncDialogBodyLock();
   focusDialogInitial(el.sheet);
 }
 
-function closeSheet() {
+function closeSheet(force = false) {
+  if (el.sheet.classList.contains('hidden')) return true;
+
+  const changed = formSnapshot(el.sheetForm) !== (el.sheetForm.dataset.initialSnapshot || '');
+  const submitting = el.sheetForm.dataset.submitting === '1';
+  if (!force && changed && !submitting) {
+    if (!confirm('有尚未保存的修改，确定放弃吗？')) return false;
+  }
+
   el.sheet.classList.add('hidden');
   el.sheetBackdrop.classList.add('hidden');
   el.sheetForm.innerHTML = '';
   el.sheetForm.onsubmit = null;
+  delete el.sheetForm.dataset.initialSnapshot;
+  delete el.sheetForm.dataset.submitting;
   syncDialogBodyLock();
   restoreDialogFocus(el.sheet);
+  return true;
 }
 
 async function loadTrips() {
