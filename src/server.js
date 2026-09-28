@@ -23,8 +23,8 @@ import {
   toBoolean,
   validDate
 } from './lib.js';
-import { resolveReferenceMetadata } from './link-preview.js';
-import { resolveBaiduMapLink, searchBaiduPoi } from './baidu.js';
+import { deriveHotelName, detectBookingPlatform, platformLabel, resolveReferenceMetadata } from './link-preview.js';
+import { isAllowedBaiduMapUrl, resolveBaiduMapLink, searchBaiduPoi } from './baidu.js';
 import { cleanupOrphanUploads } from './storage.js';
 
 const app = express();
@@ -352,6 +352,94 @@ app.post('/api/maintenance/uploads/cleanup', async (req, res) => {
     minAgeMs: toBoolean(req.body?.includeRecent) ? 0 : 24 * 60 * 60 * 1000
   });
   res.json(result);
+});
+
+app.post('/api/links/analyze', async (req, res) => {
+  const value = requiredText(req.body?.value, '链接', 3000);
+  const context = cleanText(req.body?.context, 24).toLowerCase() || 'reference';
+  const region = cleanText(req.body?.region, 80);
+
+  if (isAllowedBaiduMapUrl(value)) {
+    try {
+      const parsed = await resolveBaiduMapLink({ value, region, ak: baiduMapAk });
+      if (parsed.location || parsed.name || parsed.address) {
+        return res.json({
+          type: 'location',
+          analysis: {
+            platform: 'baidu',
+            platformLabel: '百度地图',
+            autoTitle: parsed.name || '百度地图位置',
+            displayTitle: parsed.name || '',
+            openMode: 'app'
+          },
+          location: {
+            name: parsed.name || '',
+            address: parsed.address || '',
+            uid: parsed.uid || '',
+            latitude: parsed.location?.lat ?? null,
+            longitude: parsed.location?.lng ?? null,
+            coordType: parsed.coordType || 'bd09ll'
+          },
+          value: parsed.url || value
+        });
+      }
+    } catch {}
+  }
+
+  const inputs = normalizeReferences([{ value }], 1);
+  const [reference] = await resolveReferenceMetadata(inputs);
+  const response = {
+    type: context === 'lodging' ? 'booking' : 'reference',
+    reference,
+    analysis: {
+      platform: reference.platform || 'web',
+      platformLabel: platformLabel(reference.platform || 'web'),
+      autoTitle: reference.autoTitle || reference.title || '',
+      displayTitle: reference.customTitle || reference.title || '',
+      appUrl: reference.appUrl || '',
+      openMode: reference.kind === 'copy'
+        ? 'copy'
+        : reference.kind === 'uri' || reference.appUrl
+          ? 'app'
+          : 'web'
+    },
+    value: reference.url || reference.value || value
+  };
+
+  if (context === 'lodging' && reference.kind === 'url') {
+    const bookingPlatform = detectBookingPlatform(reference.url || reference.value);
+    const hotelName = deriveHotelName(reference.autoTitle || reference.title || '', bookingPlatform);
+    const lodging = {
+      bookingPlatform,
+      bookingUrl: reference.url || reference.value || '',
+      hotelName,
+      locationName: '',
+      address: '',
+      locationUid: '',
+      latitude: null,
+      longitude: null,
+      coordType: 'bd09ll'
+    };
+
+    if (hotelName && region && baiduMapAk) {
+      try {
+        const results = await searchBaiduPoi({ ak: baiduMapAk, query: hotelName, region });
+        const exact = results.find(item => item.name === hotelName) || results[0];
+        if (exact) {
+          lodging.hotelName = exact.name || hotelName;
+          lodging.locationName = exact.name || hotelName;
+          lodging.address = [exact.city, exact.district, exact.address].filter(Boolean).join(' ');
+          lodging.locationUid = exact.uid || '';
+          lodging.latitude = exact.location?.lat ?? null;
+          lodging.longitude = exact.location?.lng ?? null;
+        }
+      } catch {}
+    }
+
+    response.lodging = lodging;
+  }
+
+  res.json(response);
 });
 
 app.get('/api/baidu/poi/search', async (req, res) => {
