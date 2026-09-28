@@ -336,7 +336,27 @@ function routeModeMeta(mode) {
   return ROUTE_MODE_META[mode] || ROUTE_MODE_META.driving;
 }
 
+function itemRoutePoint(item) {
+  const candidates = item?.details?.kind === 'dining' && Array.isArray(item.details.candidates)
+    ? item.details.candidates
+    : [];
+  if (candidates.length) {
+    const first = candidates[0];
+    return {
+      ...item,
+      location_name: first.name || '',
+      location_uid: first.locationUid || '',
+      location: first.address || '',
+      latitude: first.latitude ?? null,
+      longitude: first.longitude ?? null,
+      coord_type: first.coordType || 'bd09ll'
+    };
+  }
+  return item;
+}
+
 function hasItemCoordinates(item) {
+  item = itemRoutePoint(item);
   if (item?.latitude === null || item?.latitude === undefined || item?.longitude === null || item?.longitude === undefined) return false;
   if (String(item.latitude).trim() === '' || String(item.longitude).trim() === '') return false;
   const lat = Number(item.latitude);
@@ -345,6 +365,7 @@ function hasItemCoordinates(item) {
 }
 
 function itemLocationLabel(item) {
+  item = itemRoutePoint(item);
   return item?.location_name || item?.location || '';
 }
 
@@ -369,6 +390,7 @@ function enc(value) {
 }
 
 function baiduPointUrl(item) {
+  item = itemRoutePoint(item);
   if (!hasItemCoordinates(item)) return '';
   const scheme = baiduAppScheme();
   const label = itemLocationLabel(item) || item.title || '行程地点';
@@ -447,6 +469,8 @@ function legMode(day, fromItem, toItem) {
 }
 
 function baiduLegUrl(fromItem, toItem, mode = 'driving') {
+  fromItem = itemRoutePoint(fromItem);
+  toItem = itemRoutePoint(toItem);
   if (!hasItemCoordinates(fromItem) || !hasItemCoordinates(toItem)) return '';
   const coordType = fromItem.coord_type || 'bd09ll';
   if ((toItem.coord_type || 'bd09ll') !== coordType) return '';
@@ -467,11 +491,13 @@ function itemExpenses(item) {
 }
 
 function baiduDirectionPoint(point) {
+  point = itemRoutePoint(point);
   const name = itemLocationLabel(point) || point.title || '行程点';
   return `name:${name}|latlng:${point.latitude},${point.longitude}`;
 }
 
 function baiduViaPoint(point) {
+  point = itemRoutePoint(point);
   const result = {
     name: itemLocationLabel(point) || point.title || '行程点',
     lat: Number(point.latitude),
@@ -496,7 +522,7 @@ function baiduDayRouteUrl(day) {
   const mode = dayUniformRouteMode(day);
   if (!mode) return '';
 
-  const points = dayDisplayItems(day).filter(hasItemCoordinates).slice(0, 17);
+  const points = dayDisplayItems(day).filter(hasItemCoordinates).map(itemRoutePoint).slice(0, 17);
   if (points.length < 2) return '';
 
   const coordType = points[0].coord_type || 'bd09ll';
