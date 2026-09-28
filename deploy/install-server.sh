@@ -57,18 +57,17 @@ write_env_if_missing() {
   if [[ -f "$ENV_PATH" ]]; then
     return
   fi
-  local db_password admin_password session_secret
+  local db_password session_secret
   db_password="$(random_hex 24)"
-  admin_password="$(random_hex 10)"
   session_secret="$(random_hex 32)"
   cat > "$ENV_PATH" <<ENV
 POSTGRES_PASSWORD=$db_password
-TRAVEL_ADMIN_PASSWORD=$admin_password
+TRAVEL_ADMIN_PASSWORD=
 TRAVEL_SESSION_SECRET=$session_secret
 TRAVEL_BIND=${TRAVEL_BIND:-0.0.0.0}
 TRAVEL_PORT=${TRAVEL_PORT:-3080}
 TRAVEL_COOKIE_SECURE=${TRAVEL_COOKIE_SECURE:-0}
-TRAVEL_AUTH_DISABLED=0
+TRAVEL_AUTH_DISABLED=1
 TRAVEL_IMAGE=${TRAVEL_IMAGE:-ghcr.io/lazyxu/travel:master}
 TRAVEL_POSTGRES_IMAGE=${TRAVEL_POSTGRES_IMAGE:-postgres:17-alpine}
 TRAVEL_VERSION=$SOURCE_REF
@@ -85,7 +84,6 @@ TRAVEL_LOG_MAX_FILES=5
 TRAVEL_BACKUP_RETENTION_DAYS=7
 ENV
   chmod 600 "$ENV_PATH"
-  printf '%s' "$admin_password" > "$STATE_DIR/initial-password"
 }
 
 build_app_from_source() {
@@ -144,16 +142,17 @@ wait_healthy() {
 }
 
 show_access() {
-  local bind port password
+  local bind port auth_disabled
   bind="$(grep -E '^TRAVEL_BIND=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
   port="$(grep -E '^TRAVEL_PORT=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
-  password="$(grep -E '^TRAVEL_ADMIN_PASSWORD=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
+  auth_disabled="$(grep -E '^TRAVEL_AUTH_DISABLED=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
   [[ -n "$port" ]] || port=3080
   say "已启动。浏览器访问：http://${bind:-0.0.0.0}:$port"
   say "手机在同一局域网时，请用服务器局域网 IP + :$port 访问。"
-  if [[ -f "$STATE_DIR/initial-password" ]]; then
-    say "初始访问密码：$password"
-    rm -f "$STATE_DIR/initial-password"
+  if [[ "${auth_disabled:-1}" == "1" ]]; then
+    say '访问认证：关闭（当前无需密码）'
+  else
+    say '访问认证：已开启'
   fi
   say "管理命令：$MANAGER_PATH status | update | logs | doctor | backup"
   if [[ -w /usr/local/bin || "$(id -u)" -eq 0 ]]; then
@@ -252,6 +251,12 @@ stop() {
 
 password() {
   [[ -f "$ENV_PATH" ]] || die 'travel 尚未安装'
+  local auth_disabled
+  auth_disabled="$(grep -E '^TRAVEL_AUTH_DISABLED=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
+  if [[ "${auth_disabled:-1}" == "1" ]]; then
+    say '访问认证当前已关闭，未启用访问密码。'
+    return 0
+  fi
   grep -E '^TRAVEL_ADMIN_PASSWORD=' "$ENV_PATH" | tail -1 | cut -d= -f2-
 }
 
@@ -278,7 +283,7 @@ Commands:
   backup    Create PostgreSQL dump under ~/.travel/backups
   restart   Restart services
   stop      Stop services
-  password  Print the local admin password
+  password  Print the local admin password when authentication is enabled
 USAGE
     exit 2
     ;;
