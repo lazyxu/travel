@@ -116,7 +116,7 @@ function renderItinerary() {
           <div class="empty-state">
             <div class="empty-icon">＋</div>
             <strong>这一天还没有安排</strong>
-            <div>添加景点、餐厅、交通或住宿，并把参考链接一起保存。</div>
+            <div>添加景点、餐厅、交通或住宿，并把参考链接和图片一起保存。</div>
           </div>
         `}
       </div>
@@ -144,18 +144,30 @@ function renderItinerary() {
 }
 
 function itemCardHtml(item) {
+  const category = categoryMeta(item.category);
+  const images = Array.isArray(item.image_urls) ? item.image_urls : [];
   return `
     <article class="timeline-card">
       <div class="timeline-time ${item.item_time ? '' : 'muted'}">${escapeHtml(item.item_time || '待定')}</div>
       <div class="timeline-content">
         <div class="timeline-top">
-          <span class="category">${escapeHtml(item.category)}</span>
+          <span class="category"><span class="category-icon" aria-hidden="true">${category.icon}</span>${escapeHtml(category.label)}</span>
           <div class="card-actions">
             <button class="card-action" type="button" data-edit-item="${attr(item.id)}" aria-label="编辑">编辑</button>
           </div>
         </div>
         <h3>${escapeHtml(item.title)}</h3>
-        ${item.location ? `<div class="location">⌖ ${escapeHtml(item.location)}</div>` : ''}
+        ${item.location ? `<div class="location">📍 ${escapeHtml(item.location)}</div>` : ''}
+        ${images.length ? `
+          <div class="item-gallery item-gallery-${Math.min(images.length, 3)}">
+            ${images.slice(0, 6).map((url, index) => `
+              <a class="item-image-link" href="${attr(url)}" target="_blank" rel="noopener noreferrer" aria-label="查看图片 ${index + 1}">
+                <img class="item-image" src="${attr(url)}" alt="${attr(item.title)} 图片 ${index + 1}" loading="lazy" decoding="async" />
+                ${index === 5 && images.length > 6 ? `<span class="image-more">+${images.length - 6}</span>` : ''}
+              </a>
+            `).join('')}
+          </div>
+        ` : ''}
         ${item.notes ? `<div class="item-notes">${escapeHtml(item.notes)}</div>` : ''}
         ${(item.xhs_url || item.dianping_url) ? `
           <div class="link-row">
