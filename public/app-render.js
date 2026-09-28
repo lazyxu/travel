@@ -1,3 +1,21 @@
+function tripCardHtml(trip) {
+  const status = tripStatusMeta(trip);
+  return `
+    <article class="trip-card trip-card-${status.kind}" data-trip-id="${attr(trip.id)}" role="button" tabindex="0" aria-label="打开旅行：${attr(trip.title)}">
+      <div class="trip-card-head">
+        <h3>${escapeHtml(trip.title)}</h3>
+        <span class="trip-status trip-status-${status.kind}">${escapeHtml(status.label)}</span>
+      </div>
+      <div class="trip-meta">${trip.destination ? `${escapeHtml(trip.destination)} · ` : ''}${escapeHtml(formatRange(trip.start_date, trip.end_date))}</div>
+      ${status.kind === 'active' && status.progress !== null ? `<div class="trip-progress" aria-label="旅行进度 ${status.progress}%"><i style="width: ${status.progress}%"></i></div>` : ''}
+      <div class="trip-stats">
+        <span class="pill">⌁ ${trip.item_count} 项行程</span>
+        <span class="pill">✓ ${trip.todo_count} 项待办</span>
+      </div>
+    </article>
+  `;
+}
+
 function renderHome() {
   state.current = null;
   state.currentDayId = null;
@@ -5,6 +23,10 @@ function renderHome() {
   el.topbarTitle.textContent = '旅行计划';
   el.backHome.classList.add('hidden');
   el.bottomNav.classList.add('hidden');
+
+  const sortedTrips = [...state.trips].sort((a, b) => tripSortValue(a).localeCompare(tripSortValue(b)));
+  const currentTrips = sortedTrips.filter(trip => tripStatusMeta(trip).kind !== 'past');
+  const pastTrips = sortedTrips.filter(trip => tripStatusMeta(trip).kind === 'past');
 
   el.main.innerHTML = `
     <div class="page-head">
@@ -14,25 +36,26 @@ function renderHome() {
       </div>
       <button id="create-trip" class="button primary small" type="button">＋ 新旅行</button>
     </div>
-    <div class="trip-grid">
-      ${[...state.trips].sort((a, b) => tripSortValue(a).localeCompare(tripSortValue(b))).map(trip => {
-        const status = tripStatusMeta(trip);
-        return `
-          <article class="trip-card trip-card-${status.kind}" data-trip-id="${attr(trip.id)}" role="button" tabindex="0" aria-label="打开旅行：${attr(trip.title)}">
-            <div class="trip-card-head">
-              <h3>${escapeHtml(trip.title)}</h3>
-              <span class="trip-status trip-status-${status.kind}">${escapeHtml(status.label)}</span>
-            </div>
-            <div class="trip-meta">${trip.destination ? `${escapeHtml(trip.destination)} · ` : ''}${escapeHtml(formatRange(trip.start_date, trip.end_date))}</div>
-            ${status.kind === 'active' && status.progress !== null ? `<div class="trip-progress" aria-label="旅行进度 ${status.progress}%"><i style="width: ${status.progress}%"></i></div>` : ''}
-            <div class="trip-stats">
-              <span class="pill">⌁ ${trip.item_count} 项行程</span>
-              <span class="pill">✓ ${trip.todo_count} 项待办</span>
-            </div>
-          </article>
-        `;
-      }).join('')}
-    </div>
+
+    ${currentTrips.length ? `
+      <div class="trip-grid">
+        ${currentTrips.map(tripCardHtml).join('')}
+      </div>
+    ` : ''}
+
+    ${pastTrips.length ? `
+      <details class="past-trips" ${currentTrips.length ? '' : 'open'}>
+        <summary>
+          <span>历史旅行</span>
+          <strong>${pastTrips.length}</strong>
+          <em>⌄</em>
+        </summary>
+        <div class="trip-grid past-trip-grid">
+          ${pastTrips.map(tripCardHtml).join('')}
+        </div>
+      </details>
+    ` : ''}
+
     ${state.trips.length ? '' : emptyStateHtml({
       icon: 'trip',
       title: '还没有旅行计划',
