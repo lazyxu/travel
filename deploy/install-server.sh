@@ -8,6 +8,13 @@ BIN_DIR="$TRAVEL_HOME/bin"
 DATA_DIR="$TRAVEL_HOME/data"
 BACKUP_DIR="$TRAVEL_HOME/backups"
 STATE_DIR="$TRAVEL_HOME/state"
+LOG_DIR="$TRAVEL_HOME/logs"
+mkdir -p "$LOG_DIR" 2>/dev/null || true
+RUN_ID="$(date '+%Y%m%d-%H%M%S')-$"
+LOG_FILE="${TRAVEL_LOG_FILE:-$LOG_DIR/travel-server-$RUN_ID.log}"
+HTTP_CONNECT_TIMEOUT="${TRAVEL_HTTP_CONNECT_TIMEOUT:-15}"
+HTTP_MAX_TIME="${TRAVEL_HTTP_MAX_TIME:-60}"
+HTTP_RETRIES="${TRAVEL_HTTP_RETRIES:-3}"
 ENV_PATH="$CONFIG_DIR/.env"
 COMPOSE_PATH="$CONFIG_DIR/docker-compose.yml"
 MANAGER_PATH="$BIN_DIR/travel-server"
@@ -19,18 +26,93 @@ compose() {
   docker compose --env-file "$ENV_PATH" -f "$COMPOSE_PATH" "$@"
 }
 
-say() { printf '[travel] %s\n' "$*"; }
-die() { printf '[travel] ERROR: %s\n' "$*" >&2; exit 1; }
+timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
+
+say() {
+  local line
+  line="[travel][$(timestamp)] $*"
+  printf '%s\n' "$line"
+  printf '%s\n' "$line" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+die() {
+  local line
+  line="[travel][$(timestamp)] ERROR: $*"
+  printf '%s\n' "$line" >&2
+  printf '%s\n' "$line" >> "$LOG_FILE" 2>/dev/null || true
+  exit 1
+}
 
 fetch_to() {
-  local url="$1" dest="$2"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --retry 3 --connect-timeout 15 "$url" -o "$dest"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -q --tries=3 --timeout=15 -O "$dest" "$url"
-  else
-    die '需要 curl 或 wget'
-  fi
+  local url="$1" dest="$2" label="${3:-$(basename "$2")}"
+  local attempt rc started elapsed stats err_tmp
+  [[ "$HTTP_RETRIES" =~ ^[1-9][0-9]*$ ]] || die "TRAVEL_HTTP_RETRIES 必须是正整数"
+  [[ "$HTTP_CONNECT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || die "TRAVEL_HTTP_CONNECT_TIMEOUT 必须是正整数"
+  [[ "$HTTP_MAX_TIME" =~ ^[1-9][0-9]*$ ]] || die "TRAVEL_HTTP_MAX_TIME 必须是正整数"
+
+  err_tmp="$(mktemp "$STATE_DIR/.fetch-error.XXXXXX")"
+  trap 'rm -f "${err_tmp:-}"' RETURN
+
+  for ((attempt = 1; attempt <= HTTP_RETRIES; attempt++)); do
+    rm -f "$dest"
+    : > "$err_tmp"
+    started="$(date +%s)"
+    say "下载 $label：第 $attempt/$HTTP_RETRIES 次，连接超时 ${HTTP_CONNECT_TIMEOUT}s，总超时 ${HTTP_MAX_TIME}s"
+    say "下载地址：$url"
+
+    if command -v curl >/dev/null 2>&1; then
+      if stats="$(curl -fL --silent --show-error         --connect-timeout "$HTTP_CONNECT_TIMEOUT"         --max-time "$HTTP_MAX_TIME"         --output "$dest"         --write-out 'HTTP=%{http_code} bytes=%{size_download} total=%{time_total}s speed=%{speed_download}B/s remote=%{remote_ip}'         "$url" 2>"$err_tmp")"; then
+        elapsed=$(( $(date +%s) - started ))
+        say "下载完成 $label：$stats，墙钟耗时 ${elapsed}s"
+        trap - RETURN
+        rm -f "$err_tmp"
+        return 0
+      else
+        rc=$?
+      fi
+    elif command -v wget >/dev/null 2>&1; then
+      if command -v timeout >/dev/null 2>&1; then
+        if timeout "${HTTP_MAX_TIME}s" wget -q --tries=1 --timeout="$HTTP_CONNECT_TIMEOUT" -O "$dest" "$url" 2>"$err_tmp"; then
+          rc=0
+        else
+          rc=$?
+        fi
+      elif wget -q --tries=1 --timeout="$HTTP_CONNECT_TIMEOUT" -O "$dest" "$url" 2>"$err_tmp"; then
+        rc=0
+      else
+        rc=$?
+      fi
+
+      if [[ "$rc" -eq 0 ]]; then
+        elapsed=$(( $(date +%s) - started ))
+        say "下载完成 $label：bytes=$(wc -c < "$dest" | tr -d ' ')，墙钟耗时 ${elapsed}s"
+        trap - RETURN
+        rm -f "$err_tmp"
+        return 0
+      fi
+    else
+      trap - RETURN
+      rm -f "$err_tmp"
+      die '需要 curl 或 wget'
+    fi
+
+    elapsed=$(( $(date +%s) - started ))
+    say "下载失败 $label：exit=$rc，墙钟耗时 ${elapsed}s"
+    if [[ -s "$err_tmp" ]]; then
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && say "下载器：$line"
+      done < "$err_tmp"
+    fi
+    rm -f "$dest"
+    if (( attempt < HTTP_RETRIES )); then
+      say "等待 $((attempt * 2))s 后重试 $label..."
+      sleep $((attempt * 2))
+    fi
+  done
+
+  trap - RETURN
+  rm -f "$err_tmp"
+  die "下载 $label 失败：已重试 $HTTP_RETRIES 次。完整日志：$LOG_FILE"
 }
 
 random_hex() {
@@ -49,8 +131,8 @@ check_host() {
 }
 
 prepare_layout() {
-  mkdir -p "$CONFIG_DIR" "$BIN_DIR" "$DATA_DIR/postgres" "$BACKUP_DIR" "$STATE_DIR"
-  chmod 700 "$TRAVEL_HOME" "$CONFIG_DIR" "$BIN_DIR" "$DATA_DIR" "$BACKUP_DIR" "$STATE_DIR" || true
+  mkdir -p "$CONFIG_DIR" "$BIN_DIR" "$DATA_DIR/postgres" "$BACKUP_DIR" "$STATE_DIR" "$LOG_DIR"
+  chmod 700 "$TRAVEL_HOME" "$CONFIG_DIR" "$BIN_DIR" "$DATA_DIR" "$BACKUP_DIR" "$STATE_DIR" "$LOG_DIR" || true
 }
 
 write_env_if_missing() {
@@ -132,18 +214,48 @@ pull_images() {
 }
 
 refresh_deploy_files() {
-  local compose_tmp manager_tmp
+  local compose_tmp manager_tmp compose_sha manager_sha
+  mkdir -p "$CONFIG_DIR" "$BIN_DIR" "$STATE_DIR" "$LOG_DIR"
   compose_tmp="$(mktemp "$CONFIG_DIR/.compose.XXXXXX")"
   manager_tmp="$(mktemp "$BIN_DIR/.manager.XXXXXX")"
   trap 'rm -f "${compose_tmp:-}" "${manager_tmp:-}"' RETURN
-  fetch_to "$RAW_BASE/deploy/docker-compose.yml" "$compose_tmp"
-  fetch_to "$RAW_BASE/deploy/install-server.sh" "$manager_tmp"
+
+  say "[部署文件 1/6] 下载 docker-compose.yml"
+  fetch_to "$RAW_BASE/deploy/docker-compose.yml" "$compose_tmp" "docker-compose.yml"
+
+  say "[部署文件 2/6] 下载 install-server.sh"
+  fetch_to "$RAW_BASE/deploy/install-server.sh" "$manager_tmp" "install-server.sh"
+
+  say "[部署文件 3/6] 校验 install-server.sh Bash 语法"
+  if ! bash -n "$manager_tmp" >>"$LOG_FILE" 2>&1; then
+    die "新 install-server.sh 语法校验失败，未覆盖现有文件。日志：$LOG_FILE"
+  fi
+  say "install-server.sh 语法校验通过"
+
+  say "[部署文件 4/6] 校验 docker-compose.yml"
+  if ! docker compose --env-file "$ENV_PATH" -f "$compose_tmp" config --quiet >>"$LOG_FILE" 2>&1; then
+    die "新 docker-compose.yml 校验失败，未覆盖现有文件。日志：$LOG_FILE"
+  fi
+  say "docker-compose.yml 校验通过"
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    compose_sha="$(sha256sum "$compose_tmp" | awk '{print $1}')"
+    manager_sha="$(sha256sum "$manager_tmp" | awk '{print $1}')"
+    say "下载文件 SHA256：compose=${compose_sha:0:12} manager=${manager_sha:0:12}"
+  fi
+
+  say "[部署文件 5/6] 保存上一版部署文件"
+  [[ -f "$COMPOSE_PATH" ]] && cp -p "$COMPOSE_PATH" "$STATE_DIR/docker-compose.yml.prev" || true
+  [[ -f "$MANAGER_PATH" ]] && cp -p "$MANAGER_PATH" "$STATE_DIR/travel-server.prev" || true
+
+  say "[部署文件 6/6] 原子替换部署文件"
   chmod 700 "$manager_tmp"
   mv "$compose_tmp" "$COMPOSE_PATH"
   mv "$manager_tmp" "$MANAGER_PATH"
   chmod 600 "$COMPOSE_PATH"
   chmod 700 "$MANAGER_PATH"
   trap - RETURN
+  say "部署文件刷新完成"
 }
 
 wait_healthy() {
@@ -205,6 +317,7 @@ backup() {
 }
 
 install() {
+  say "日志文件：$LOG_FILE"
   check_host
   prepare_layout
   write_env_if_missing
@@ -218,6 +331,10 @@ install() {
 }
 
 update() {
+  mkdir -p "$LOG_DIR" "$STATE_DIR"
+  say "日志文件：$LOG_FILE"
+  say "更新源：$RAW_BASE"
+  say "HTTP 策略：retries=$HTTP_RETRIES connect_timeout=${HTTP_CONNECT_TIMEOUT}s max_time=${HTTP_MAX_TIME}s"
   check_host
   [[ -f "$ENV_PATH" && -f "$COMPOSE_PATH" ]] || die 'travel 尚未安装，请先执行安装命令'
   ensure_optional_env_defaults
@@ -225,11 +342,13 @@ update() {
   backup
   say '刷新部署文件...'
   refresh_deploy_files
+  say '部署文件已刷新，开始更新容器镜像...'
   pull_images
-  say '滚动重建容器...'
+  say '镜像准备完成，滚动重建容器...'
   compose up -d --remove-orphans
   wait_healthy
   say '更新完成'
+  say "完整更新日志：$LOG_FILE"
   compose ps
 }
 
