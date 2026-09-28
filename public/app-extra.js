@@ -8,10 +8,10 @@ function legControlHtml(day, fromItem, toItem, { readonly = false } = {}) {
   const mapUrl = baiduLegUrl(fromItem, toItem, mode);
 
   if (readonly) {
-    return \`<div class="leg-control readonly"><span class="leg-line"></span><span class="leg-mode-label">\${meta.icon} \${escapeHtml(meta.label)}</span>\${mapUrl ? \`<a class="leg-map-link" href="\${attr(mapUrl)}">百度地图 App ↗</a>\` : ''}</div>\`;
+    return `<div class="leg-control readonly"><span class="leg-line"></span><span class="leg-mode-label">${meta.icon} ${escapeHtml(meta.label)}</span>${mapUrl ? `<a class="leg-map-link" href="${attr(mapUrl)}">百度地图 App ↗</a>` : ''}</div>`;
   }
 
-  return \`<div class="leg-control"><span class="leg-line"></span><select data-leg-mode data-from-key="\${attr(itemRouteKey(fromItem))}" data-to-key="\${attr(itemRouteKey(toItem))}" aria-label="两站之间交通方式"><option value="driving" \${mode === 'driving' ? 'selected' : ''}>🚕 驾车</option><option value="walking" \${mode === 'walking' ? 'selected' : ''}>🚶 步行</option><option value="transit" \${mode === 'transit' ? 'selected' : ''}>🚇 公交</option></select>\${mapUrl ? \`<a class="leg-map-link" href="\${attr(mapUrl)}">百度地图 App ↗</a>\` : ''}</div>\`;
+  return `<div class="leg-control"><span class="leg-line"></span><select data-leg-mode data-from-key="${attr(itemRouteKey(fromItem))}" data-to-key="${attr(itemRouteKey(toItem))}" aria-label="两站之间交通方式"><option value="driving" ${mode === 'driving' ? 'selected' : ''}>🚕 驾车</option><option value="walking" ${mode === 'walking' ? 'selected' : ''}>🚶 步行</option><option value="transit" ${mode === 'transit' ? 'selected' : ''}>🚇 公交</option></select>${mapUrl ? `<a class="leg-map-link" href="${attr(mapUrl)}">百度地图 App ↗</a>` : ''}</div>`;
 }
 
 function dayTimelineHtml(day, { readonly = false } = {}) {
@@ -27,23 +27,23 @@ function inlineExpenseHtml(item, { readonly = false } = {}) {
   if (!expenses.length && readonly) return '';
   const currency = state.current?.trip?.currency || 'CNY';
   const total = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-  const rows = expenses.map(expense => \`
-    <button class="inline-expense-row \${expense.paid ? 'paid' : ''}" type="button"
-      \${readonly ? 'disabled' : \`data-edit-expense="\${attr(expense.id)}" data-expense-item="\${attr(item.id)}"\`}>
-      <span>\${escapeHtml(expense.category)} · \${escapeHtml(expense.title)}</span>
-      <strong>\${escapeHtml(formatMoney(expense.amount, currency))}</strong>
-      <em>\${expense.paid ? '已支付' : '未支付'}</em>
+  const rows = expenses.map(expense => `
+    <button class="inline-expense-row ${expense.paid ? 'paid' : ''}" type="button"
+      ${readonly ? 'disabled' : `data-edit-expense="${attr(expense.id)}" data-expense-item="${attr(item.id)}"`}>
+      <span>${escapeHtml(expense.category)} · ${escapeHtml(expense.title)}</span>
+      <strong>${escapeHtml(formatMoney(expense.amount, currency))}</strong>
+      <em>${expense.paid ? '已支付' : '未支付'}</em>
     </button>
-  \`).join('');
-  return \`
+  `).join('');
+  return `
     <div class="inline-expenses">
       <div class="inline-expense-head">
-        <span>费用\${expenses.length ? \` · \${escapeHtml(formatMoney(total, currency))}\` : ''}</span>
-        \${readonly ? '' : \`<button class="card-action" type="button" data-add-expense="\${attr(item.id)}">＋费用</button>\`}
+        <span>费用${expenses.length ? ` · ${escapeHtml(formatMoney(total, currency))}` : ''}</span>
+        ${readonly ? '' : `<button class="card-action" type="button" data-add-expense="${attr(item.id)}">＋费用</button>`}
       </div>
-      \${rows}
+      ${rows}
     </div>
-  \`;
+  `;
 }
 
 function tripExpenseSummaryHtml() {
@@ -55,18 +55,18 @@ function tripExpenseSummaryHtml() {
   const unlinked = expenses.filter(expense => !expense.item_id);
   if (!budget && !expenses.length) return '';
 
-  return \`
+  return `
     <section class="trip-expense-summary">
-      <div><span>预算</span><strong>\${budget ? escapeHtml(formatMoney(budget, currency)) : '未设置'}</strong></div>
-      <div><span>已记录</span><strong>\${escapeHtml(formatMoney(total, currency))}</strong></div>
-      \${unlinked.length ? \`
+      <div><span>预算</span><strong>${budget ? escapeHtml(formatMoney(budget, currency)) : '未设置'}</strong></div>
+      <div><span>已记录</span><strong>${escapeHtml(formatMoney(total, currency))}</strong></div>
+      ${unlinked.length ? `
         <div class="unlinked-expenses">
           <span>未关联费用</span>
-          \${unlinked.map(expense => \`<button type="button" data-unlinked-expense="\${attr(expense.id)}">\${escapeHtml(expense.title)} · \${escapeHtml(formatMoney(expense.amount, currency))}</button>\`).join('')}
+          ${unlinked.map(expense => `<button type="button" data-unlinked-expense="${attr(expense.id)}">${escapeHtml(expense.title)} · ${escapeHtml(formatMoney(expense.amount, currency))}</button>`).join('')}
         </div>
-      \` : ''}
+      ` : ''}
     </section>
-  \`;
+  `;
 }
 
 async function bindItineraryActions(day) {
@@ -74,7 +74,7 @@ async function bindItineraryActions(day) {
     select.addEventListener('change', async () => {
       select.disabled = true;
       try {
-        const result = await api(\`/api/days/\${day.id}/leg-mode\`, {
+        const result = await api(`/api/days/${day.id}/leg-mode`, {
           method: 'PUT',
           body: JSON.stringify({
             fromKey: select.dataset.fromKey,
@@ -120,61 +120,61 @@ function renderSharedTrip() {
   el.backHome.classList.add('hidden');
   el.bottomNav.classList.add('hidden');
 
-  el.main.innerHTML = \`
+  el.main.innerHTML = `
     <section class="shared-trip-head">
       <span class="readonly-badge">只读分享</span>
-      <h1>\${escapeHtml(trip.title)}</h1>
-      <div>\${escapeHtml([trip.destination, formatRange(trip.start_date, trip.end_date)].filter(Boolean).join(' · '))}</div>
-      \${trip.notes ? \`<p>\${escapeHtml(trip.notes)}</p>\` : ''}
+      <h1>${escapeHtml(trip.title)}</h1>
+      <div>${escapeHtml([trip.destination, formatRange(trip.start_date, trip.end_date)].filter(Boolean).join(' · '))}</div>
+      ${trip.notes ? `<p>${escapeHtml(trip.notes)}</p>` : ''}
     </section>
     <div class="shared-days">
-      \${days.map(day => \`
+      ${days.map(day => `
         <section class="shared-day">
           <div class="section-head">
             <div>
-              <h2>D\${dayNumber(day.day_date, trip.start_date)} · \${escapeHtml(formatDate(day.day_date))}</h2>
-              <div class="section-subtitle">\${escapeHtml(day.title || weekday(day.day_date))}</div>
+              <h2>D${dayNumber(day.day_date, trip.start_date)} · ${escapeHtml(formatDate(day.day_date))}</h2>
+              <div class="section-subtitle">${escapeHtml(day.title || weekday(day.day_date))}</div>
             </div>
-            \${baiduDayRouteUrl(day) ? \`<a class="button ghost small map-button" href="\${attr(baiduDayRouteUrl(day))}">🗺 全日路线</a>\` : ''}
+            ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}">🗺 全日路线</a>` : ''}
           </div>
           <div class="timeline">
-            \${dayDisplayItems(day).length ? dayTimelineHtml(day, { readonly: true }) : '<div class="empty-state"><strong>这一天暂无安排</strong></div>'}
+            ${dayDisplayItems(day).length ? dayTimelineHtml(day, { readonly: true }) : '<div class="empty-state"><strong>这一天暂无安排</strong></div>'}
           </div>
         </section>
-      \`).join('')}
+      `).join('')}
     </div>
-  \`;
+  `;
   bindReferenceActions();
 }
 
 function shareManagerHtml(shares = []) {
-  return \`
+  return `
     <div class="stack">
       <div class="share-help">生成的链接无需登录，只能查看行程。参考链接、图片和地图仍可点击；费用、待办和确认号不会公开。</div>
       <button id="create-share-link" class="button primary full" type="button">生成只读分享链接</button>
       <div id="new-share-result"></div>
       <div class="share-list">
-        \${shares.length ? shares.map(share => \`
+        ${shares.length ? shares.map(share => `
           <div class="share-row">
-            <div><strong>已启用分享</strong><span>\${escapeHtml(new Date(share.created_at).toLocaleString())}</span></div>
-            <button class="button danger small" type="button" data-revoke-share="\${attr(share.id)}">停用</button>
+            <div><strong>已启用分享</strong><span>${escapeHtml(new Date(share.created_at).toLocaleString())}</span></div>
+            <button class="button danger small" type="button" data-revoke-share="${attr(share.id)}">停用</button>
           </div>
-        \`).join('') : '<div class="image-preview-empty">当前没有有效分享链接</div>'}
+        `).join('') : '<div class="image-preview-empty">当前没有有效分享链接</div>'}
       </div>
     </div>
-  \`;
+  `;
 }
 
 async function openShareManager() {
   try {
     const tripId = state.current.trip.id;
-    const shares = await api(\`/api/trips/\${tripId}/shares\`);
+    const shares = await api(`/api/trips/${tripId}/shares`);
     openSheet('只读分享', shareManagerHtml(shares), async () => {});
 
     el.sheetForm.querySelectorAll('[data-revoke-share]').forEach(button => {
       button.addEventListener('click', async () => {
         try {
-          await api(\`/api/shares/\${button.dataset.revokeShare}\`, { method: 'DELETE' });
+          await api(`/api/shares/${button.dataset.revokeShare}`, { method: 'DELETE' });
           button.closest('.share-row')?.remove();
           showToast('分享链接已停用');
         } catch (error) {
@@ -187,10 +187,10 @@ async function openShareManager() {
       const button = event.currentTarget;
       button.disabled = true;
       try {
-        const created = await api(\`/api/trips/\${tripId}/shares\`, { method: 'POST', body: JSON.stringify({}) });
-        const url = \`\${window.location.origin}\${created.path}\`;
+        const created = await api(`/api/trips/${tripId}/shares`, { method: 'POST', body: JSON.stringify({}) });
+        const url = `${window.location.origin}${created.path}`;
         const result = el.sheetForm.querySelector('#new-share-result');
-        result.innerHTML = \`<div class="share-created"><input readonly value="\${attr(url)}" /><button id="copy-share-link" class="button ghost small" type="button">复制</button></div>\`;
+        result.innerHTML = `<div class="share-created"><input readonly value="${attr(url)}" /><button id="copy-share-link" class="button ghost small" type="button">复制</button></div>`;
         result.querySelector('#copy-share-link')?.addEventListener('click', async () => {
           await copyText(url);
           showToast('分享链接已复制');
@@ -208,28 +208,28 @@ async function openShareManager() {
 }
 
 function referenceEditorRowHtml(ref = {}) {
-  return \`
+  return `
     <div class="reference-editor-row">
       <div class="reference-editor-fields">
-        <input name="refTitle" maxlength="180" value="\${attr(ref.title || '')}" placeholder="展示标题（可留空自动提取）" />
-        <input name="refValue" maxlength="3000" value="\${attr(ref.value || '')}" placeholder="粘贴小红书 / 抖音 / 点评 / 微信等链接" />
+        <input name="refTitle" maxlength="180" value="${attr(ref.title || '')}" placeholder="展示标题（可留空自动提取）" />
+        <input name="refValue" maxlength="3000" value="${attr(ref.value || '')}" placeholder="粘贴小红书 / 抖音 / 点评 / 微信等链接" />
       </div>
       <button class="reference-remove" type="button" data-remove-reference aria-label="删除参考入口">×</button>
     </div>
-  \`;
+  `;
 }
 
 function referenceEditorHtml(refs = []) {
   const list = refs.length ? refs : [{ title: '', value: '' }];
-  return \`
+  return `
     <div class="reference-editor" data-reference-editor>
       <div class="reference-editor-list" data-reference-list>
-        \${list.map(referenceEditorRowHtml).join('')}
+        ${list.map(referenceEditorRowHtml).join('')}
       </div>
       <button id="add-reference-row" class="button ghost small" type="button">＋ 添加参考入口</button>
       <p class="form-help">最多 12 个。标题可以自己写；留空时服务端会尝试提取帖子、商品或门店标题。</p>
     </div>
-  \`;
+  `;
 }
 
 function collectReferenceEntries(form) {
