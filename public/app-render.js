@@ -219,7 +219,6 @@ function structuredDetailsHtml(item) {
 }
 
 function hotelStayAnchorHtml(item, { readonly = false } = {}) {
-  const mapUrl = baiduPointUrl(item);
   const hotelName = item.details?.hotelName || itemLocationLabel(item) || item.title || '酒店';
   const roleLabel = item._stayRole === 'morning' ? '从酒店出发' : '回酒店';
   const showExpense = item._stayRole === 'night'
@@ -238,7 +237,6 @@ function hotelStayAnchorHtml(item, { readonly = false } = {}) {
         <h3>${escapeHtml(hotelName)}</h3>
         ${itemLocationLabel(item) && itemLocationLabel(item) !== hotelName ? `<div class="location">📍 ${escapeHtml(itemLocationLabel(item))}</div>` : ''}
         ${item.location_name && item.location ? `<div class="location-address">${escapeHtml(item.location)}</div>` : ''}
-        ${mapUrl ? `<div class="map-row"><a class="map-link app-link" href="${attr(mapUrl)}">百度地图 App ↗</a></div>` : ''}
         ${showExpense ? inlineExpenseHtml(item, { readonly }) : ''}
       </div>
     </article>
@@ -250,7 +248,6 @@ function itemCardHtml(item, { readonly = false } = {}) {
   const category = categoryMeta(item.category);
   const images = Array.isArray(item.image_urls) ? item.image_urls : [];
   const links = Array.isArray(item.links) ? item.links : [];
-  const mapUrl = baiduPointUrl(item);
   const displayLocation = itemLocationLabel(item);
   return `
     <article class="timeline-card" data-item-id="${attr(item.id)}">
@@ -267,7 +264,6 @@ function itemCardHtml(item, { readonly = false } = {}) {
         ${structuredDetailsHtml(item)}
         ${displayLocation ? `<div class="location">📍 ${escapeHtml(displayLocation)}</div>` : ''}
         ${item.location_name && item.location && item.location_name !== item.location ? `<div class="location-address">${escapeHtml(item.location)}</div>` : ''}
-        ${mapUrl ? `<div class="map-row"><a class="map-link" href="${attr(mapUrl)}" >百度地图 App ↗</a></div>` : ''}
         ${images.length ? `
           <div class="item-gallery item-gallery-${Math.min(images.length, 3)}">
             ${images.slice(0, 6).map((url, index) => `
@@ -429,6 +425,32 @@ function bindItinerarySorting(day) {
     return bar;
   };
 
+  const makeDragPreview = (card, event) => {
+    const rect = card.getBoundingClientRect();
+    const preview = card.cloneNode(true);
+    preview.classList.remove('sorting-card');
+    preview.classList.add('drag-card-preview');
+    preview.removeAttribute('data-item-id');
+    preview.setAttribute('aria-hidden', 'true');
+    preview.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+    preview.querySelectorAll('button, a, input, select, textarea').forEach(node => node.setAttribute('tabindex', '-1'));
+    preview.style.width = `${rect.width}px`;
+    preview.style.maxHeight = `${Math.min(rect.height, window.innerHeight * 0.68)}px`;
+    document.body.appendChild(preview);
+
+    const offsetX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const offsetY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    const move = (x, y) => {
+      const left = Math.max(8, Math.min(window.innerWidth - rect.width - 8, x - offsetX));
+      const visibleHeight = Math.min(rect.height, window.innerHeight * 0.68);
+      const top = Math.max(8, Math.min(window.innerHeight - visibleHeight - 8, y - offsetY));
+      preview.style.left = `${left}px`;
+      preview.style.top = `${top}px`;
+    };
+    move(event.clientX, event.clientY);
+    return { preview, move };
+  };
+
   el.main.querySelectorAll('[data-drag-handle]').forEach(handle => {
     handle.addEventListener('pointerdown', event => {
       if (event.button !== undefined && event.button !== 0) return;
@@ -438,49 +460,89 @@ function bindItinerarySorting(day) {
 
       const card = handle.closest('[data-item-id]');
       if (!card) return;
+
       const itemId = card.dataset.itemId;
+      const visibleIds = [...timeline.querySelectorAll('.timeline-card[data-item-id]')].map(node => node.dataset.itemId);
+      const remainingIds = visibleIds.filter(id => id !== itemId);
+      let dropIndex = Math.max(0, visibleIds.indexOf(itemId));
       let targetDayId = String(day.id);
+
       const targets = makeDayTargets();
+      const indicator = document.createElement('div');
+      indicator.className = 'drag-drop-indicator';
+      const { preview, move: movePreview } = makeDragPreview(card, event);
+
       card.classList.add('sorting-card');
       document.body.classList.add('sorting-itinerary');
 
-      const updateDayTarget = element => {
-        const target = element?.closest?.('[data-sort-day]');
-        if (!target) return false;
-        targetDayId = target.dataset.sortDay;
-        targets.querySelectorAll('[data-sort-day]').forEach(button => {
-          button.classList.toggle('drop-active', button.dataset.sortDay === targetDayId);
-        });
-        return true;
+      const clearDayTargets = () => {
+        targets.querySelectorAll('[data-sort-day]').forEach(button => button.classList.remove('drop-active'));
+      };
+
+      const placeIndicator = (targetCard, after) => {
+        const targetIndex = remainingIds.indexOf(targetCard.dataset.itemId);
+        if (targetIndex < 0) return;
+        dropIndex = targetIndex + (after ? 1 : 0);
+
+        if (after) {
+          const leg = targetCard.nextElementSibling?.classList.contains('leg-control')
+            ? targetCard.nextElementSibling
+            : null;
+          timeline.insertBefore(indicator, leg ? leg.nextSibling : targetCard.nextSibling);
+        } else {
+          timeline.insertBefore(indicator, targetCard);
+        }
       };
 
       const onMove = moveEvent => {
         if (moveEvent.pointerId !== event.pointerId) return;
         moveEvent.preventDefault();
+        movePreview(moveEvent.clientX, moveEvent.clientY);
+
         const edge = 86;
         if (moveEvent.clientY < edge) window.scrollBy({ top: -14, behavior: 'auto' });
         else if (moveEvent.clientY > window.innerHeight - edge) window.scrollBy({ top: 14, behavior: 'auto' });
+
         const stack = document.elementsFromPoint(moveEvent.clientX, moveEvent.clientY);
-        if (stack.some(updateDayTarget)) return;
+        const dayTarget = stack.map(node => node?.closest?.('[data-sort-day]')).find(Boolean);
+        if (dayTarget) {
+          targetDayId = dayTarget.dataset.sortDay;
+          indicator.remove();
+          clearDayTargets();
+          dayTarget.classList.add('drop-active');
+          return;
+        }
 
         targetDayId = String(day.id);
-        targets.querySelectorAll('[data-sort-day]').forEach(button => button.classList.remove('drop-active'));
-        const targetCard = stack.find(node => node?.matches?.('.timeline-card[data-item-id]'));
-        if (!targetCard || targetCard === card || targetCard.parentElement !== timeline) return;
+        clearDayTargets();
+        const targetCard = stack.find(node =>
+          node?.matches?.('.timeline-card[data-item-id]')
+          && node !== card
+          && node.parentElement === timeline
+        );
+        if (!targetCard) return;
+
         const rect = targetCard.getBoundingClientRect();
-        const after = moveEvent.clientY > rect.top + rect.height / 2;
-        timeline.insertBefore(card, after ? targetCard.nextSibling : targetCard);
+        placeIndicator(targetCard, moveEvent.clientY > rect.top + rect.height / 2);
       };
 
-      const finish = async upEvent => {
-        if (upEvent.pointerId !== event.pointerId) return;
+      const cleanup = () => {
         window.removeEventListener('pointermove', onMove, { capture: true });
         window.removeEventListener('pointerup', finish, { capture: true });
         window.removeEventListener('pointercancel', finish, { capture: true });
         try { handle.releasePointerCapture?.(event.pointerId); } catch {}
         card.classList.remove('sorting-card');
         document.body.classList.remove('sorting-itinerary');
+        indicator.remove();
+        preview.remove();
         targets.remove();
+      };
+
+      const finish = async upEvent => {
+        if (upEvent.pointerId !== event.pointerId) return;
+        const cancelled = upEvent.type === 'pointercancel';
+        cleanup();
+        if (cancelled) return;
 
         try {
           if (targetDayId !== String(day.id)) {
@@ -493,9 +555,17 @@ function bindItinerarySorting(day) {
             return;
           }
 
-          const visibleIds = [...timeline.querySelectorAll('.timeline-card[data-item-id]')].map(node => node.dataset.itemId);
-          const hiddenIds = day.items.map(item => String(item.id)).filter(id => !visibleIds.includes(id));
-          const itemIds = [...visibleIds, ...hiddenIds];
+          const orderedVisible = [...remainingIds];
+          orderedVisible.splice(Math.max(0, Math.min(dropIndex, orderedVisible.length)), 0, itemId);
+
+          const visibleSet = new Set(visibleIds);
+          let visibleIndex = 0;
+          const itemIds = day.items.map(item => {
+            const id = String(item.id);
+            if (!visibleSet.has(id)) return id;
+            return orderedVisible[visibleIndex++];
+          });
+
           await api(`/api/days/${day.id}/items/order`, {
             method: 'PUT',
             body: JSON.stringify({ itemIds })
@@ -514,3 +584,4 @@ function bindItinerarySorting(day) {
     });
   });
 }
+
