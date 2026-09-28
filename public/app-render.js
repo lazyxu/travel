@@ -263,6 +263,10 @@ function itemCardHtml(item, { readonly = false } = {}) {
               if (link.platform === 'wechat' && link.kind === 'uri') {
                 return `<button class="link-chip generic platform-wechat" type="button" data-open-wechat-scheme="${attr(href)}">${escapeHtml(label)} · 打开小程序</button>`;
               }
+              if (link.platform === 'dianping') {
+                const appHref = link.appUrl || 'dianping://';
+                return `<a class="link-chip generic platform-dianping app-deep-link" href="${attr(appHref)}">${escapeHtml(label)} · 打开 App</a>`;
+              }
               const suffix = link.platform === 'wechat' ? ' · 打开小程序' : ' ↗';
               return `<a class="link-chip generic platform-${attr(link.platform || 'web')}" href="${attr(href)}" rel="noopener noreferrer">${escapeHtml(label)}${suffix}</a>`;
             }).join('')}

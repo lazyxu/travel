@@ -13,7 +13,7 @@ import {
   normalizeUrlList,
   optionalUrl
 } from '../src/lib.js';
-import { detectPlatform, extractContentTitle, extractHtmlTitle, isPrivateAddress } from '../src/link-preview.js';
+import { detectPlatform, dianpingAppUrl, extractContentTitle, extractDianpingShopId, extractHtmlTitle, isPrivateAddress } from '../src/link-preview.js';
 import { normalizeBaiduPoiPayload, parseBaiduMapLink } from '../src/baidu.js';
 
 test('enumerateDates includes both ends', () => {
@@ -154,5 +154,23 @@ test('content title extraction strips platform chrome', () => {
   assert.equal(
     extractContentTitle('<script type="application/ld+json">{"headline":"西湖一日游攻略","name":"小红书"}</script>', 'xhs'),
     '西湖一日游攻略'
+  );
+});
+
+
+test('Dianping links generate app deep links', () => {
+  assert.equal(extractDianpingShopId('https://www.dianping.com/shop/GxJZ4urc9TnKE3kY'), 'GxJZ4urc9TnKE3kY');
+  assert.equal(extractDianpingShopId('https://m.dianping.com/shop/H9wHsyrJkbVJWu2g'), 'H9wHsyrJkbVJWu2g');
+  assert.equal(
+    dianpingAppUrl('https://www.dianping.com/shop/1859284', '上海来福士广场'),
+    'dianping://shopinfo?id=1859284'
+  );
+  assert.equal(
+    dianpingAppUrl('https://dpurl.cn/abc', '杭州餐厅'),
+    'dianping://searchshoplist?keyword=%E6%9D%AD%E5%B7%9E%E9%A4%90%E5%8E%85'
+  );
+  assert.equal(
+    dianpingAppUrl('https://dpurl.cn/abc', '短链标题', 'https://www.dianping.com/shop/H9wHsyrJkbVJWu2g'),
+    'dianping://shopinfo?id=H9wHsyrJkbVJWu2g'
   );
 });

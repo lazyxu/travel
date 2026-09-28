@@ -113,6 +113,31 @@ export function extractHtmlTitle(html) {
   return match ? cleanTitle(match[1]) : '';
 }
 
+export function extractDianpingShopId(value) {
+  let url;
+  try { url = new URL(String(value || '')); } catch { return ''; }
+  const host = url.hostname.toLowerCase();
+  if (!/(^|\.)(?:m\.)?dianping\.com$/.test(host) && host !== 'www.dianping.com') return '';
+
+  const pathMatch = url.pathname.match(/\/(?:shop|shopshare)\/([A-Za-z0-9_-]+)/i);
+  if (pathMatch?.[1]) return pathMatch[1];
+
+  for (const key of ['shopId', 'shopid', 'shopuuid', 'id']) {
+    const candidate = String(url.searchParams.get(key) || '').trim();
+    if (/^[A-Za-z0-9_-]+$/.test(candidate)) return candidate;
+  }
+  return '';
+}
+
+export function dianpingAppUrl(value, title = '', finalUrl = '') {
+  const shopId = extractDianpingShopId(finalUrl) || extractDianpingShopId(value);
+  if (shopId) return `dianping://shopinfo?id=${encodeURIComponent(shopId)}`;
+
+  const keyword = cleanTitle(title);
+  if (keyword) return `dianping://searchshoplist?keyword=${encodeURIComponent(keyword)}`;
+  return 'dianping://';
+}
+
 export function detectPlatform(value) {
   const raw = String(value || '').toLowerCase();
   if (raw.startsWith('weixin://') || raw.includes('小程序://')) return 'wechat';
@@ -286,7 +311,8 @@ export async function resolveReferenceMetadata(refs) {
         url: ref.url,
         title: customTitle,
         customTitle,
-        autoTitle: preservedAutoTitle
+        autoTitle: preservedAutoTitle,
+        ...(platform === 'dianping' ? { appUrl: dianpingAppUrl(ref.url, customTitle) } : {})
       };
     }
 
@@ -299,7 +325,8 @@ export async function resolveReferenceMetadata(refs) {
         url: ref.url,
         title: preservedAutoTitle,
         customTitle: '',
-        autoTitle: preservedAutoTitle
+        autoTitle: preservedAutoTitle,
+        ...(platform === 'dianping' ? { appUrl: dianpingAppUrl(ref.url, preservedAutoTitle) } : {})
       };
     }
 
@@ -317,7 +344,8 @@ export async function resolveReferenceMetadata(refs) {
         url: ref.url,
         title: autoTitle,
         customTitle: '',
-        autoTitle
+        autoTitle,
+        ...(finalPlatform === 'dianping' ? { appUrl: dianpingAppUrl(ref.url, autoTitle, finalUrl) } : {})
       };
       metadataCacheSet(ref.url, resolved);
       return { ...resolved };
@@ -330,7 +358,8 @@ export async function resolveReferenceMetadata(refs) {
         url: ref.url,
         title: autoTitle,
         customTitle: '',
-        autoTitle
+        autoTitle,
+        ...(platform === 'dianping' ? { appUrl: dianpingAppUrl(ref.url, autoTitle) } : {})
       };
       metadataCacheSet(ref.url, resolved);
       return { ...resolved };
