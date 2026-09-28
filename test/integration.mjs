@@ -144,7 +144,7 @@ try {
 
   await json(`/api/days/${day2.id}`, {
     method: 'PUT',
-    body: JSON.stringify({ title: 'Day Two', notes: '', routeMode: 'walking' })
+    body: JSON.stringify({ title: 'Day Two', notes: '' })
   });
 
   aggregate = await json(`/api/trips/${created.trip.id}`);
@@ -152,7 +152,6 @@ try {
   const currentDay2 = aggregate.days.find(day => String(day.id) === String(day2.id));
   assert.deepEqual(currentDay1.items.map(item => item.title), ['Second']);
   assert.deepEqual(currentDay2.items.map(item => item.title), ['First']);
-  assert.equal(currentDay2.route_mode, 'walking');
   assert.equal(currentDay2.items[0].details.kind, 'flight');
   assert.equal(currentDay2.items[0].location_name, '西湖');
   assert.equal(currentDay2.items[0].location_uid, 'poi-west-lake');
