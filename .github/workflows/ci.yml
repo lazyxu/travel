@@ -22,6 +22,8 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run check
       - run: npm test
+      - name: Validate installer syntax
+        run: bash -n deploy/install-server.sh
       - name: Validate Compose
         env:
           POSTGRES_PASSWORD: test-password
