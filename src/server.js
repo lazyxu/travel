@@ -213,6 +213,19 @@ async function getTripAggregate(id) {
   };
 }
 
+function normalizeInlineExpense(value, fallbackTitle) {
+  if (!value || typeof value !== 'object') return null;
+  const amount = normalizeMoney(value.amount, '费用金额');
+  if (Number(amount) <= 0) return null;
+  return {
+    title: cleanText(value.title, 160) || fallbackTitle,
+    amount,
+    category: expenseCategories.has(value.category) ? value.category : '其他',
+    paid: toBoolean(value.paid),
+    notes: cleanText(value.notes, 2000)
+  };
+}
+
 async function createMissingDays(client, tripId, startDate, endDate) {
   const dates = enumerateDates(startDate, endDate);
   for (let index = 0; index < dates.length; index += 1) {
@@ -511,20 +524,43 @@ app.post('/api/days/:dayId/items', async (req, res) => {
   const referenceInputs = normalizeReferences(req.body?.references ?? req.body?.links ?? [], 12);
   const links = await resolveReferenceMetadata(referenceInputs);
   const details = normalizeItemDetails(req.body?.details);
+  const inlineExpense = normalizeInlineExpense(req.body?.expense, title);
 
-  const result = await pool.query(
-    `INSERT INTO itinerary_items (
-       day_id, item_time, start_time, end_time, category, title, location_name, location_uid, location,
-       latitude, longitude, coord_type, notes, links, image_urls, details, position
-     )
-     SELECT $1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-            COALESCE((SELECT MAX(position) + 1 FROM itinerary_items WHERE day_id = $1), 0)
-     WHERE EXISTS (SELECT 1 FROM trip_days WHERE id = $1)
-     RETURNING *`,
-    [dayId, startTime, endTime, category, title, locationName, locationUid, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
-  );
-  if (!result.rowCount) throw httpError(404, '日期不存在');
-  res.status(201).json(result.rows[0]);
+  const created = await withTx(async client => {
+    const dayResult = await client.query(
+      'SELECT id, trip_id, day_date FROM trip_days WHERE id = $1 FOR UPDATE',
+      [dayId]
+    );
+    if (!dayResult.rowCount) throw httpError(404, '日期不存在');
+    const day = dayResult.rows[0];
+
+    const result = await client.query(
+      `INSERT INTO itinerary_items (
+         day_id, item_time, start_time, end_time, category, title, location_name, location_uid, location,
+         latitude, longitude, coord_type, notes, links, image_urls, details, position
+       )
+       VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+              COALESCE((SELECT MAX(position) + 1 FROM itinerary_items WHERE day_id = $1), 0))
+       RETURNING *`,
+      [dayId, startTime, endTime, category, title, locationName, locationUid, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
+    );
+    const item = result.rows[0];
+
+    let expense = null;
+    if (inlineExpense) {
+      const expenseResult = await client.query(
+        `INSERT INTO expenses (trip_id, item_id, expense_date, category, title, amount, paid, notes, position)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+                 COALESCE((SELECT MAX(position) + 1 FROM expenses WHERE trip_id = $1), 0))
+         RETURNING *`,
+        [day.trip_id, item.id, day.day_date, inlineExpense.category, inlineExpense.title, inlineExpense.amount, inlineExpense.paid, inlineExpense.notes]
+      );
+      expense = expenseResult.rows[0];
+    }
+    return { item, expense };
+  });
+
+  res.status(201).json({ ...created.item, expense: created.expense });
 });
 
 app.put('/api/items/:id', async (req, res) => {

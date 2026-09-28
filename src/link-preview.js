@@ -6,6 +6,29 @@ import net from 'node:net';
 const MAX_HTML_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 3500;
 const MAX_REDIRECTS = 3;
+const METADATA_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const METADATA_CACHE_MAX = 256;
+const metadataCache = new Map();
+
+function metadataCacheGet(url) {
+  const entry = metadataCache.get(url);
+  if (!entry) return null;
+  if (Date.now() - entry.at > METADATA_CACHE_TTL_MS) {
+    metadataCache.delete(url);
+    return null;
+  }
+  metadataCache.delete(url);
+  metadataCache.set(url, entry);
+  return entry.value;
+}
+
+function metadataCacheSet(url, value) {
+  metadataCache.delete(url);
+  metadataCache.set(url, { at: Date.now(), value });
+  while (metadataCache.size > METADATA_CACHE_MAX) {
+    metadataCache.delete(metadataCache.keys().next().value);
+  }
+}
 
 const PLATFORM_LABELS = {
   wechat: '微信小程序',
@@ -243,31 +266,77 @@ export async function resolveReferenceMetadata(refs) {
     const value = ref.value || ref.url || '';
     const platform = detectPlatform(value);
     const customTitle = cleanTitle(ref.customTitle || ref.title || '');
+    const preservedAutoTitle = cleanTitle(ref.autoTitle || '');
 
     if (ref.kind === 'copy') {
-      return { kind: 'copy', platform, value, title: customTitle || PLATFORM_LABELS[platform] || '参考入口', customTitle };
+      const autoTitle = preservedAutoTitle || PLATFORM_LABELS[platform] || '参考入口';
+      return { kind: 'copy', platform, value, title: customTitle || autoTitle, customTitle, autoTitle };
     }
     if (ref.kind === 'uri') {
-      return { kind: 'uri', platform, value, url: ref.url || value, title: customTitle || PLATFORM_LABELS[platform] || '参考入口', customTitle };
+      const autoTitle = preservedAutoTitle || PLATFORM_LABELS[platform] || '参考入口';
+      return { kind: 'uri', platform, value, url: ref.url || value, title: customTitle || autoTitle, customTitle, autoTitle };
     }
+
+    // A user-supplied title is authoritative. Do not block saving on a third-party request.
+    if (customTitle) {
+      return {
+        kind: 'url',
+        platform,
+        value: ref.url,
+        url: ref.url,
+        title: customTitle,
+        customTitle,
+        autoTitle: preservedAutoTitle
+      };
+    }
+
+    // Once an automatic title was resolved, preserve it across later edits without fetching again.
+    if (preservedAutoTitle) {
+      return {
+        kind: 'url',
+        platform,
+        value: ref.url,
+        url: ref.url,
+        title: preservedAutoTitle,
+        customTitle: '',
+        autoTitle: preservedAutoTitle
+      };
+    }
+
+    const cached = metadataCacheGet(ref.url);
+    if (cached) return { ...cached };
 
     try {
       const { html, finalUrl } = await requestHtml(ref.url);
       const finalPlatform = detectPlatform(finalUrl) || platform;
-      return {
+      const autoTitle = extractContentTitle(html, finalPlatform) || fallbackTitle(finalUrl, finalPlatform);
+      const resolved = {
         kind: 'url',
         platform: finalPlatform,
         value: ref.url,
         url: ref.url,
-        title: customTitle || extractContentTitle(html, finalPlatform) || fallbackTitle(finalUrl, finalPlatform),
-        customTitle
+        title: autoTitle,
+        customTitle: '',
+        autoTitle
       };
+      metadataCacheSet(ref.url, resolved);
+      return { ...resolved };
     } catch {
-      return { kind: 'url', platform, value: ref.url, url: ref.url, title: customTitle || fallbackTitle(ref.url, platform), customTitle };
+      const autoTitle = fallbackTitle(ref.url, platform);
+      const resolved = {
+        kind: 'url',
+        platform,
+        value: ref.url,
+        url: ref.url,
+        title: autoTitle,
+        customTitle: '',
+        autoTitle
+      };
+      metadataCacheSet(ref.url, resolved);
+      return { ...resolved };
     }
   }));
 }
-
 export async function resolveLinkMetadata(urls) {
   return resolveReferenceMetadata(urls.map(url => ({ kind: 'url', url, value: url })));
 }

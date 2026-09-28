@@ -300,7 +300,7 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
           <button id="baidu-link-parse" class="button ghost small" type="button">解析</button>
         </div>
         <div class="location-map-action" data-location-map-action>
-          ${baiduPointUrl(item) ? `<a class="map-link" href="${attr(baiduPointUrl(item))}" target="_blank" rel="noopener noreferrer">在百度地图打开 ↗</a>` : '<span>尚未定位；可搜索地点或粘贴百度地图链接</span>'}
+          ${baiduPointUrl(item) ? `<a class="map-link" href="${attr(baiduPointUrl(item))}" >在百度地图打开 ↗</a>` : '<span>尚未定位；可搜索地点或粘贴百度地图链接</span>'}
         </div>
       </div>
       <input name="locationUid" type="hidden" value="${attr(item.location_uid || '')}" />
@@ -349,6 +349,17 @@ function openItemForm(day, item = null) {
       imageUrls: extractImageRefs(form.get('imageUrls'), 12),
       details: collectItemDetails(form)
     };
+    if (!item) {
+      const initialAmount = Number(form.get('initialExpenseAmount') || 0);
+      if (initialAmount > 0) {
+        payload.expense = {
+          amount: initialAmount,
+          category: form.get('initialExpenseCategory') || '其他',
+          paid: form.get('initialExpensePaid') === 'on',
+          notes: ''
+        };
+      }
+    }
     const targetDayId = String(form.get('targetDayId') || day.id);
     let savedItem = item;
     if (item) {
@@ -361,22 +372,6 @@ function openItemForm(day, item = null) {
       }
     } else {
       savedItem = await api(`/api/days/${targetDayId}/items`, { method: 'POST', body: JSON.stringify(payload) });
-      const initialAmount = Number(form.get('initialExpenseAmount') || 0);
-      if (initialAmount > 0) {
-        const targetDay = state.current.days.find(value => String(value.id) === targetDayId);
-        await api(`/api/trips/${state.current.trip.id}/expenses`, {
-          method: 'POST',
-          body: JSON.stringify({
-            title: savedItem.title,
-            amount: initialAmount,
-            category: form.get('initialExpenseCategory') || '其他',
-            expenseDate: targetDay?.day_date || '',
-            itemId: savedItem.id,
-            paid: form.get('initialExpensePaid') === 'on',
-            notes: ''
-          })
-        });
-      }
     }
     closeSheet();
     if (targetDayId !== String(state.currentDayId)) {
@@ -422,7 +417,7 @@ function openItemForm(day, item = null) {
     };
     const url = baiduPointUrl(temp);
     locationMapAction.innerHTML = url
-      ? `<a class="map-link" href="${attr(url)}" target="_blank" rel="noopener noreferrer">在百度地图打开 ↗</a>`
+      ? `<a class="map-link" href="${attr(url)}" >在百度地图打开 ↗</a>`
       : '<span>尚未定位；可搜索地点或粘贴百度地图链接</span>';
   };
 
@@ -439,7 +434,7 @@ function openItemForm(day, item = null) {
       });
       if (parsed.name && locationNameInput) locationNameInput.value = parsed.name;
       if (parsed.address && locationInput) locationInput.value = parsed.address;
-      if (locationUidInput) locationUidInput.value = '';
+      if (locationUidInput) locationUidInput.value = parsed.uid || '';
       if (parsed.location) {
         if (latInput) latInput.value = parsed.location.lat;
         if (lngInput) lngInput.value = parsed.location.lng;

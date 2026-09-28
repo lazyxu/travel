@@ -218,17 +218,19 @@ function itemReferenceEntries(item) {
   const refs = Array.isArray(item?.links) ? item.links : [];
   if (refs.length) {
     return refs.map(ref => ({
-      title: ref?.customTitle || ref?.title || '',
-      value: ref?.value || ref?.url || ''
+      customTitle: ref?.customTitle || '',
+      autoTitle: ref?.autoTitle || (!ref?.customTitle ? (ref?.title || '') : ''),
+      value: ref?.value || ref?.url || '',
+      platform: ref?.platform || 'web'
     })).filter(ref => ref.value);
   }
   return [item?.xhs_url, item?.dianping_url]
     .filter(Boolean)
-    .map(value => ({ title: '', value }));
+    .map(value => ({ customTitle: '', autoTitle: '', value, platform: 'web' }));
 }
 
 function itemReferenceValues(item) {
-  return itemReferenceEntries(item).map(ref => ref.title ? `${ref.title} | ${ref.value}` : ref.value);
+  return itemReferenceEntries(item).map(ref => ref.customTitle ? `${ref.customTitle} | ${ref.value}` : ref.value);
 }
 
 function extractReferenceInputs(value, maxItems = 12) {

@@ -124,6 +124,7 @@ test('Baidu map URI parsing extracts location and readable fields', () => {
   const web = parseBaiduMapLink('https://api.map.baidu.com/marker?location=30.25,120.15&title=%E8%A5%BF%E6%B9%96&content=%E6%9D%AD%E5%B7%9E&coord_type=bd09ll&output=html&src=x');
   assert.deepEqual(web.location, { lat: 30.25, lng: 120.15 });
   assert.equal(web.name, '西湖');
+  assert.equal(parseBaiduMapLink('https://api.map.baidu.com/marker?location=30.25,120.15&title=%E8%A5%BF%E6%B9%96&uid=abc123').uid, 'abc123');
   const app = parseBaiduMapLink('baidumap://map/marker?location=39.9,116.4&title=%E5%A4%A9%E5%AE%89%E9%97%A8&content=%E5%8C%97%E4%BA%AC&coord_type=gcj02');
   assert.equal(app.address, '北京');
   assert.equal(app.coordType, 'gcj02');
@@ -140,6 +141,7 @@ test('reference titles support explicit display titles', () => {
     '餐厅必点 | https://www.dianping.com/shop/1'
   ]);
   assert.equal(refs[0].customTitle, '我的攻略标题');
+  assert.equal(normalizeReferences([{ value: 'https://example.com/a', autoTitle: '自动标题' }])[0].autoTitle, '自动标题');
   assert.equal(refs[1].customTitle, '餐厅必点');
 });
 

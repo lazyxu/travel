@@ -123,7 +123,8 @@ export function parseBaiduMapLink(value) {
     url.searchParams.get('query') || url.searchParams.get('wd') || ''
   ).trim();
   const address = safeDecode(url.searchParams.get('address') || url.searchParams.get('content') || '').trim();
-  return { url: raw, name, address, location, coordType };
+  const uid = safeDecode(url.searchParams.get('uid') || url.searchParams.get('poi_uid') || '').trim().slice(0, 128);
+  return { url: raw, name, address, location, coordType, uid };
 }
 
 async function resolveBaiduRedirect(urlText, fetchImpl = fetch) {
@@ -170,28 +171,47 @@ function extractNameFromHtml(html) {
 export async function resolveBaiduMapLink({ value, region = '', ak = '', fetchImpl = fetch }) {
   const direct = parseBaiduMapLink(value);
   if (!direct) throw new Error('不是可识别的百度地图链接');
-  if (direct.location || direct.url.startsWith('baidumap://')) return direct;
 
-  const { finalUrl, html } = await resolveBaiduRedirect(direct.url, fetchImpl);
-  const resolved = parseBaiduMapLink(finalUrl) || direct;
-  if (resolved.location) return resolved;
+  let resolved = direct;
+  let finalUrl = direct.url;
+  let html = '';
 
-  const name = resolved.name || direct.name || extractNameFromHtml(html);
-  const address = resolved.address || direct.address || '';
-  if (name && ak && region) {
+  if (!direct.url.startsWith('baidumap://') && !direct.uid) {
+    try {
+      const redirected = await resolveBaiduRedirect(direct.url, fetchImpl);
+      finalUrl = redirected.finalUrl;
+      html = redirected.html;
+      resolved = parseBaiduMapLink(finalUrl) || direct;
+    } catch {
+      resolved = direct;
+    }
+  }
+
+  let name = resolved.name || direct.name || extractNameFromHtml(html);
+  let address = resolved.address || direct.address || '';
+  let location = resolved.location || direct.location || null;
+  let uid = resolved.uid || direct.uid || '';
+
+  // Even when the shared URL already has coordinates, enrich it with the Baidu POI UID.
+  if (!uid && name && ak && region) {
     try {
       const results = await searchBaiduPoi({ ak, query: name, region, fetchImpl });
       const exact = results.find(item => item.name === name) || results[0];
-      if (exact?.location) {
-        return {
-          url: finalUrl,
-          name: exact.name || name,
-          address: [exact.city, exact.district, exact.address].filter(Boolean).join(' '),
-          location: exact.location,
-          coordType: 'bd09ll'
-        };
+      if (exact) {
+        uid = exact.uid || '';
+        name = exact.name || name;
+        if (!address) address = [exact.city, exact.district, exact.address].filter(Boolean).join(' ');
+        if (!location && exact.location) location = exact.location;
       }
     } catch {}
   }
-  return { url: finalUrl, name, address, location: null, coordType: 'bd09ll' };
+
+  return {
+    url: finalUrl,
+    name,
+    address,
+    location,
+    coordType: resolved.coordType || direct.coordType || 'bd09ll',
+    uid
+  };
 }

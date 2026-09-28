@@ -106,9 +106,16 @@ try {
       location: '',
       notes: '',
       references: [],
-      imageUrls: []
+      imageUrls: [],
+      expense: {
+        amount: 88,
+        category: '餐饮',
+        paid: false
+      }
     })
   });
+  assert.equal(Number(second.expense.amount), 88);
+  assert.equal(String(second.expense.item_id), String(second.id));
 
   await json(`/api/days/${day1.id}/items/order`, {
     method: 'PUT',

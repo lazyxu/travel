@@ -208,11 +208,17 @@ async function openShareManager() {
 }
 
 function referenceEditorRowHtml(ref = {}) {
+  const autoTitle = ref.autoTitle || '';
   return `
     <div class="reference-editor-row">
       <div class="reference-editor-fields">
-        <input name="refTitle" maxlength="180" value="${attr(ref.title || '')}" placeholder="展示标题（可留空自动提取）" />
-        <input name="refValue" maxlength="3000" value="${attr(ref.value || '')}" placeholder="粘贴小红书 / 抖音 / 点评 / 微信等链接" />
+        <div class="reference-editor-auto">
+          <span>自动标题</span>
+          <strong data-reference-auto-label>${escapeHtml(autoTitle || '尚未提取')}</strong>
+        </div>
+        <input name="refTitle" maxlength="180" value="${attr(ref.customTitle || '')}" placeholder="自定义展示标题（可选，优先显示）" />
+        <input name="refValue" maxlength="3000" value="${attr(ref.value || '')}" data-initial-value="${attr(ref.value || '')}" placeholder="粘贴小红书 / 抖音 / 点评 / 微信等链接" />
+        <input name="refAutoTitle" type="hidden" value="${attr(autoTitle)}" />
       </div>
       <button class="reference-remove" type="button" data-remove-reference aria-label="删除参考入口">×</button>
     </div>
@@ -220,27 +226,31 @@ function referenceEditorRowHtml(ref = {}) {
 }
 
 function referenceEditorHtml(refs = []) {
-  const list = refs.length ? refs : [{ title: '', value: '' }];
+  const list = refs.length ? refs : [{ customTitle: '', autoTitle: '', value: '' }];
   return `
     <div class="reference-editor" data-reference-editor>
       <div class="reference-editor-list" data-reference-list>
         ${list.map(referenceEditorRowHtml).join('')}
       </div>
       <button id="add-reference-row" class="button ghost small" type="button">＋ 添加参考入口</button>
-      <p class="form-help">最多 12 个。标题可以自己写；留空时服务端会尝试提取帖子、商品或门店标题。</p>
+      <p class="form-help">自定义标题优先显示；留空时才自动抓取。已提取的自动标题会缓存，后续保存不会重复访问第三方网站。</p>
     </div>
   `;
 }
 
 function collectReferenceEntries(form) {
-  const titles = form.getAll('refTitle');
+  const customTitles = form.getAll('refTitle');
+  const autoTitles = form.getAll('refAutoTitle');
   const values = form.getAll('refValue');
   const refs = [];
   for (let index = 0; index < values.length; index += 1) {
     const value = String(values[index] || '').trim();
-    const title = String(titles[index] || '').trim();
     if (!value) continue;
-    refs.push({ value, title });
+    refs.push({
+      value,
+      customTitle: String(customTitles[index] || '').trim(),
+      autoTitle: String(autoTitles[index] || '').trim()
+    });
     if (refs.length >= 12) break;
   }
   return refs;
@@ -258,6 +268,18 @@ function bindReferenceEditor() {
       if (button) button.disabled = rows.length <= 1;
     });
   };
+
+  editor.addEventListener('input', event => {
+    const valueInput = event.target.closest('[name="refValue"]');
+    if (!valueInput) return;
+    const row = valueInput.closest('.reference-editor-row');
+    const autoInput = row?.querySelector('[name="refAutoTitle"]');
+    const autoLabel = row?.querySelector('[data-reference-auto-label]');
+    if (valueInput.value.trim() !== String(valueInput.dataset.initialValue || '').trim()) {
+      if (autoInput) autoInput.value = '';
+      if (autoLabel) autoLabel.textContent = '链接已修改，保存后重新提取';
+    }
+  });
 
   editor.addEventListener('click', event => {
     const remove = event.target.closest('[data-remove-reference]');

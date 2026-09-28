@@ -319,7 +319,7 @@ show_access() {
   else
     say '访问认证：已开启'
   fi
-  say "管理命令：$MANAGER_PATH status | version | update | cleanup | logs | doctor | backup"
+  say "管理命令：$MANAGER_PATH status | version | update | cleanup | logs | doctor | backup | backups | restore"
   local baidu_ak_value
   baidu_ak_value="$(grep -E '^TRAVEL_BAIDU_MAP_AK=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
   if [[ -n "$baidu_ak_value" ]]; then
@@ -357,6 +357,134 @@ backup() {
   find "$BACKUP_DIR" -type f -name 'travel-*.sql.gz' -mtime "+$retention" -delete 2>/dev/null || true
   find "$BACKUP_DIR" -type f -name 'travel-*.uploads.tar.gz' -mtime "+$retention" -delete 2>/dev/null || true
   say '备份完成'
+}
+
+resolve_backup_stamp() {
+  local requested="${1:-latest}" stamp=""
+  if [[ "$requested" == "latest" ]]; then
+    local latest
+    latest="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'travel-*.sql.gz' -printf '%T@ %f\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)"
+    [[ -n "$latest" ]] || die '没有可用数据库备份'
+    stamp="${latest#travel-}"
+    stamp="${stamp%.sql.gz}"
+  else
+    stamp="$requested"
+  fi
+  [[ "$stamp" =~ ^[0-9]{8}-[0-9]{6}$ ]] || die '备份时间点格式应为 YYYYMMDD-HHMMSS 或 latest'
+  [[ -f "$BACKUP_DIR/travel-$stamp.sql.gz" ]] || die "数据库备份不存在：travel-$stamp.sql.gz"
+  printf '%s' "$stamp"
+}
+
+list_backups() {
+  [[ -d "$BACKUP_DIR" ]] || { say '暂无备份'; return 0; }
+  local found=0
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    found=1
+    local base stamp uploads
+    base="$(basename "$file")"
+    stamp="${base#travel-}"
+    stamp="${stamp%.sql.gz}"
+    uploads='no'
+    [[ -f "$BACKUP_DIR/travel-$stamp.uploads.tar.gz" ]] && uploads='yes'
+    printf '%s\tdb=%s\tuploads=%s\n' "$stamp" "$(du -h "$file" | awk '{print $1}')" "$uploads"
+  done < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'travel-*.sql.gz' -print 2>/dev/null | sort -r)
+  [[ "$found" -eq 1 ]] || say '暂无备份'
+}
+
+validate_upload_archive() {
+  local archive="$1"
+  [[ -f "$archive" ]] || return 0
+  tar -tzf "$archive" >/dev/null
+  if tar -tzf "$archive" | awk '/^\// || /(^|\/)\.\.($|\/)/ { bad=1 } END { exit bad ? 0 : 1 }'; then
+    die "上传图片备份包含不安全路径：$archive"
+  fi
+}
+
+verify_backup_stamp() {
+  local stamp="$1" db_archive uploads_archive verify_db
+  db_archive="$BACKUP_DIR/travel-$stamp.sql.gz"
+  uploads_archive="$BACKUP_DIR/travel-$stamp.uploads.tar.gz"
+  say "校验数据库压缩包：$(basename "$db_archive")"
+  gzip -t "$db_archive" || die '数据库备份 gzip 校验失败'
+  if [[ -f "$uploads_archive" ]]; then
+    say "校验图片压缩包：$(basename "$uploads_archive")"
+    validate_upload_archive "$uploads_archive"
+  fi
+
+  compose up -d postgres >/dev/null
+  local tries=30
+  until compose exec -T postgres pg_isready -U travel -d travel >/dev/null 2>&1; do
+    (( tries-- > 0 )) || die 'PostgreSQL 未就绪，无法验证备份'
+    sleep 1
+  done
+
+  verify_db="travel_verify_$$_$RANDOM"
+  trap 'compose exec -T postgres dropdb -U travel --if-exists "'"$verify_db"'" >/dev/null 2>&1 || true' RETURN
+  compose exec -T postgres createdb -U travel "$verify_db"
+  if ! gzip -dc "$db_archive" | compose exec -T postgres psql -v ON_ERROR_STOP=1 -U travel -d "$verify_db" >/dev/null; then
+    die '数据库备份无法完整恢复到临时数据库'
+  fi
+  local has_trips
+  has_trips="$(compose exec -T postgres psql -At -U travel -d "$verify_db" -c "SELECT to_regclass('public.trips') IS NOT NULL")"
+  [[ "$has_trips" == "t" ]] || die '备份验证失败：缺少 trips 表'
+  trap - RETURN
+  compose exec -T postgres dropdb -U travel --if-exists "$verify_db" >/dev/null
+  say "备份验证通过：$stamp"
+}
+
+backup_verify() {
+  [[ -f "$ENV_PATH" && -f "$COMPOSE_PATH" ]] || die 'travel 尚未安装'
+  local stamp
+  stamp="$(resolve_backup_stamp "${3:-${2:-latest}}")"
+  verify_backup_stamp "$stamp"
+}
+
+restore() {
+  [[ -f "$ENV_PATH" && -f "$COMPOSE_PATH" ]] || die 'travel 尚未安装'
+  local requested="${2:-}" yes="${3:-}" stamp db_archive uploads_archive upload_dir
+  [[ -n "$requested" ]] || die '用法：travel-server restore <YYYYMMDD-HHMMSS|latest> [--yes]'
+  stamp="$(resolve_backup_stamp "$requested")"
+  db_archive="$BACKUP_DIR/travel-$stamp.sql.gz"
+  uploads_archive="$BACKUP_DIR/travel-$stamp.uploads.tar.gz"
+
+  verify_backup_stamp "$stamp"
+  if [[ "$yes" != "--yes" ]]; then
+    printf '将恢复 %s，并覆盖当前数据库/上传图片。输入 RESTORE 继续: ' "$stamp"
+    local answer
+    read -r answer
+    [[ "$answer" == "RESTORE" ]] || die '已取消恢复'
+  fi
+
+  say '恢复前创建紧急备份...'
+  backup
+  say '停止应用容器...'
+  compose stop app >/dev/null || true
+  compose up -d postgres >/dev/null
+
+  say "恢复数据库：$stamp"
+  compose exec -T postgres psql -U travel -d postgres -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='travel' AND pid <> pg_backend_pid();" >/dev/null
+  compose exec -T postgres dropdb -U travel --if-exists travel
+  compose exec -T postgres createdb -U travel travel
+  gzip -dc "$db_archive" | compose exec -T postgres psql -v ON_ERROR_STOP=1 -U travel -d travel >/dev/null
+
+  upload_dir="$(grep -E '^TRAVEL_UPLOAD_DATA_DIR=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
+  upload_dir="${upload_dir:-$DATA_DIR/uploads}"
+  mkdir -p "$upload_dir"
+  if [[ -f "$uploads_archive" ]]; then
+    say "恢复上传图片：$(basename "$uploads_archive")"
+    validate_upload_archive "$uploads_archive"
+    find "$upload_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    tar -xzf "$uploads_archive" -C "$upload_dir"
+  else
+    say '该时间点没有 uploads 备份，保留当前上传目录不变'
+  fi
+  ensure_upload_layout
+
+  say '启动应用并执行数据库迁移...'
+  compose up -d app
+  wait_healthy
+  say "恢复完成：$stamp"
 }
 
 install() {
@@ -533,7 +661,11 @@ case "${1:-install}" in
   cleanup) cleanup "$@" ;;
   logs) logs "$@" ;;
   doctor) doctor ;;
-  backup) backup ;;
+  backup)
+    if [[ "${2:-}" == "verify" ]]; then backup_verify "$@"; else backup; fi
+    ;;
+  backups) list_backups ;;
+  restore) restore "$@" ;;
   restart) restart ;;
   stop) stop ;;
   password) password ;;
@@ -550,7 +682,9 @@ Commands:
   cleanup   Delete orphan uploaded images older than 24h (--dry-run or --all)
   logs      Follow logs (optionally: travel-server logs app|postgres)
   doctor    Check Docker, Compose config and app health
-  backup    Create PostgreSQL dump under ~/.travel/backups
+  backup    Create backup; use "backup verify [timestamp|latest]" to test restoreability
+  backups   List available backup timestamps
+  restore   Restore database/uploads from a verified backup timestamp
   restart   Restart services
   stop      Stop services
   password  Print the local admin password when authentication is enabled

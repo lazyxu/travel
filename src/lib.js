@@ -46,7 +46,8 @@ export function normalizeReferences(value, maxItems = 12) {
   for (const entry of source) {
     const isObject = typeof entry === 'object' && entry !== null;
     let candidate = isObject ? (entry.value || entry.url || '') : entry;
-    let customTitle = isObject ? cleanText(entry.title || entry.customTitle, 180) : '';
+    let customTitle = isObject ? cleanText(entry.customTitle ?? entry.title, 180) : '';
+    let autoTitle = isObject ? cleanText(entry.autoTitle, 180) : '';
     let raw = cleanText(candidate, 3000);
     if (!raw) continue;
 
@@ -63,11 +64,11 @@ export function normalizeReferences(value, maxItems = 12) {
     let ref;
     if (httpMatch) {
       const url = optionalUrl(httpMatch[0].replace(/[),，。；;]+$/g, ''), '参考链接');
-      ref = { kind: 'url', url, value: url, customTitle };
+      ref = { kind: 'url', url, value: url, customTitle, autoTitle };
     } else if (/^weixin:\/\//i.test(raw)) {
-      ref = { kind: 'uri', url: raw, value: raw, customTitle };
+      ref = { kind: 'uri', url: raw, value: raw, customTitle, autoTitle };
     } else if (/(?:#)?小程序:\/\//i.test(raw)) {
-      ref = { kind: 'copy', value: raw, customTitle };
+      ref = { kind: 'copy', value: raw, customTitle, autoTitle };
     } else {
       throw httpError(400, '参考入口仅支持网页链接、weixin:// 链接或微信小程序口令');
     }
@@ -76,6 +77,7 @@ export function normalizeReferences(value, maxItems = 12) {
     const existing = refs.find(item => `${item.kind}:${item.value}` === key);
     if (existing) {
       if (customTitle) existing.customTitle = customTitle;
+      if (autoTitle) existing.autoTitle = autoTitle;
     } else {
       refs.push(ref);
     }
