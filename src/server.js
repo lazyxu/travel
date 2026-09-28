@@ -137,6 +137,7 @@ async function publicTripAggregate(token) {
       const details = { ...(item.details || {}) };
       delete details.confirmationNo;
       if (!settings.hotelPhone) delete details.phone;
+      if (!settings.links) delete details.bookingUrl;
       return {
         ...item,
         notes: settings.notes ? item.notes : '',
