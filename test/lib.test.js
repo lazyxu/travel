@@ -15,6 +15,7 @@ import {
 } from '../src/lib.js';
 import { deriveHotelName, detectBookingPlatform, detectPlatform, dianpingAppUrl, extractContentTitle, extractDianpingShopId, extractHtmlTitle, isPrivateAddress } from '../src/link-preview.js';
 import { normalizeBaiduPoiPayload, parseBaiduMapLink } from '../src/baidu.js';
+import { analyzeOrderText } from '../src/order-parser.js';
 
 test('enumerateDates includes both ends', () => {
   assert.deepEqual(enumerateDates('2026-10-01', '2026-10-03'), ['2026-10-01', '2026-10-02', '2026-10-03']);
@@ -192,4 +193,35 @@ test('lodging details accept booking URL', () => {
   });
   assert.equal(details.bookingPlatform, '华住会');
   assert.match(details.bookingUrl, /^https:\/\//);
+});
+
+
+test('order text parser extracts hotel flight and train fields', () => {
+  const hotel = analyzeOrderText({
+    kind: 'lodging',
+    anchorDate: '2026-10-01',
+    text: '酒店名称：杭州西湖全季酒店\n入住：10月2日 14:00\n离店：10月3日 12:00\n房型：高级大床房\n订单号：HZ123'
+  });
+  assert.equal(hotel.details.hotelName, '杭州西湖全季酒店');
+  assert.equal(hotel.details.checkInDate, '2026-10-02');
+  assert.equal(hotel.details.checkInTime, '14:00');
+  assert.equal(hotel.details.confirmationNo, 'HZ123');
+
+  const flight = analyzeOrderText({
+    kind: 'flight',
+    anchorDate: '2026-10-01',
+    text: '航班号：MU5123\n出发机场：杭州萧山国际机场\n出发：10月2日 08:20\n到达机场：北京首都国际机场\n到达：10月2日 10:35\n座位：21A'
+  });
+  assert.equal(flight.details.flightNo, 'MU5123');
+  assert.equal(flight.details.departureTime, '08:20');
+  assert.equal(flight.details.arrivalTime, '10:35');
+
+  const train = analyzeOrderText({
+    kind: 'train',
+    anchorDate: '2026-10-01',
+    text: '车次：G1234\n出发站：杭州东\n出发：10月2日 09:00\n到达站：上海虹桥\n到达：10月2日 10:05\n车厢：03车\n座位：12A'
+  });
+  assert.equal(train.details.trainNo, 'G1234');
+  assert.equal(train.details.departureStation, '杭州东');
+  assert.equal(train.details.carriage, '03');
 });

@@ -26,6 +26,7 @@ import {
 import { deriveHotelName, detectBookingPlatform, platformLabel, resolveReferenceMetadata } from './link-preview.js';
 import { isAllowedBaiduMapUrl, resolveBaiduMapLink, searchBaiduPoi } from './baidu.js';
 import { cleanupOrphanUploads } from './storage.js';
+import { analyzeOrderText } from './order-parser.js';
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
@@ -137,7 +138,16 @@ async function publicTripAggregate(token) {
       const details = { ...(item.details || {}) };
       delete details.confirmationNo;
       if (!settings.hotelPhone) delete details.phone;
-      if (!settings.links) delete details.bookingUrl;
+      if (!settings.links) {
+        delete details.bookingUrl;
+        if (details.kind === 'dining' && Array.isArray(details.candidates)) {
+          details.candidates = details.candidates.map(candidate => ({
+            ...candidate,
+            sourceUrl: '',
+            appUrl: ''
+          }));
+        }
+      }
       return {
         ...item,
         notes: settings.notes ? item.notes : '',
@@ -407,6 +417,32 @@ app.post('/api/links/analyze', async (req, res) => {
     value: reference.url || reference.value || value
   };
 
+  if (context === 'dining') {
+    const candidateName = reference.customTitle || reference.autoTitle || reference.title || '';
+    const place = {
+      name: candidateName,
+      address: '',
+      locationUid: '',
+      latitude: null,
+      longitude: null,
+      coordType: 'bd09ll'
+    };
+    if (candidateName && region && baiduMapAk) {
+      try {
+        const results = await searchBaiduPoi({ ak: baiduMapAk, query: candidateName, region });
+        const exact = results.find(item => item.name === candidateName) || results[0];
+        if (exact) {
+          place.name = exact.name || candidateName;
+          place.address = [exact.city, exact.district, exact.address].filter(Boolean).join(' ');
+          place.locationUid = exact.uid || '';
+          place.latitude = exact.location?.lat ?? null;
+          place.longitude = exact.location?.lng ?? null;
+        }
+      } catch {}
+    }
+    response.place = place;
+  }
+
   if (context === 'lodging' && reference.kind === 'url') {
     const bookingPlatform = detectBookingPlatform(reference.url || reference.value);
     const hotelName = deriveHotelName(reference.autoTitle || reference.title || '', bookingPlatform);
@@ -441,6 +477,20 @@ app.post('/api/links/analyze', async (req, res) => {
   }
 
   res.json(response);
+});
+
+app.post('/api/orders/analyze', async (req, res) => {
+  const text = requiredText(req.body?.text, '订单文本', 20000);
+  const kind = cleanText(req.body?.kind, 12).toLowerCase();
+  const anchorDate = cleanText(req.body?.anchorDate, 10);
+  if (kind && !new Set(['lodging', 'flight', 'train']).has(kind)) {
+    throw httpError(400, '订单类型仅支持酒店、航班或高铁/火车');
+  }
+  try {
+    res.json(analyzeOrderText({ text, kind, anchorDate }));
+  } catch (error) {
+    throw httpError(400, error.message || '订单文本解析失败');
+  }
 });
 
 app.get('/api/baidu/poi/search', async (req, res) => {
