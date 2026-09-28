@@ -7,13 +7,17 @@ import {
   cleanText,
   enumerateDates,
   httpError,
-  normalizeTime,
+  normalizeCoordType,
+  normalizeCoordinate,
+  normalizeLinkUrls,
+  normalizeTimeRange,
   normalizeUrlList,
   optionalUrl,
   requiredText,
   toBoolean,
   validDate
 } from './lib.js';
+import { resolveLinkMetadata } from './link-preview.js';
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
@@ -96,11 +100,13 @@ async function getTripAggregate(id) {
     ),
     pool.query(
       `SELECT i.id, i.day_id, i.item_time, i.category, i.title, i.location, i.notes,
-              i.xhs_url, i.dianping_url, i.image_urls, i.position, i.created_at, i.updated_at
+              i.xhs_url, i.dianping_url, i.links, i.image_urls,
+              i.start_time, i.end_time, i.latitude, i.longitude, i.coord_type,
+              i.position, i.created_at, i.updated_at
          FROM itinerary_items i
          JOIN trip_days d ON d.id = i.day_id
         WHERE d.trip_id = $1
-        ORDER BY d.day_date, NULLIF(i.item_time, '') NULLS LAST, i.position, i.id`,
+        ORDER BY d.day_date, NULLIF(COALESCE(NULLIF(i.start_time, ''), i.item_time), '') NULLS LAST, i.position, i.id`,
       [id]
     ),
     pool.query(
@@ -270,19 +276,27 @@ app.post('/api/days/:dayId/items', async (req, res) => {
   const dayId = idParam(req.params.dayId, '日期 ID');
   const title = requiredText(req.body?.title, '行程标题', 160);
   const category = categories.has(req.body?.category) ? req.body.category : '其他';
-  const itemTime = normalizeTime(req.body?.itemTime);
+  const { startTime, endTime } = normalizeTimeRange(req.body?.startTime ?? req.body?.itemTime, req.body?.endTime);
   const location = cleanText(req.body?.location, 240);
+  const latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
+  const longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
+  if ((latitude === null) !== (longitude === null)) throw httpError(400, '纬度和经度需要同时填写');
+  const coordType = normalizeCoordType(req.body?.coordType);
   const notes = cleanText(req.body?.notes, 5000);
-  const xhsUrl = optionalUrl(req.body?.xhsUrl, '小红书链接');
-  const dianpingUrl = optionalUrl(req.body?.dianpingUrl, '大众点评链接');
   const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
+  const linkUrls = normalizeLinkUrls(req.body?.links || [], '参考链接', 12);
+  const links = await resolveLinkMetadata(linkUrls);
+
   const result = await pool.query(
-    `INSERT INTO itinerary_items (day_id, item_time, category, title, location, notes, xhs_url, dianping_url, image_urls, position)
-     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9,
+    `INSERT INTO itinerary_items (
+       day_id, item_time, start_time, end_time, category, title, location,
+       latitude, longitude, coord_type, notes, links, image_urls, position
+     )
+     SELECT $1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
             COALESCE((SELECT MAX(position) + 1 FROM itinerary_items WHERE day_id = $1), 0)
      WHERE EXISTS (SELECT 1 FROM trip_days WHERE id = $1)
      RETURNING *`,
-    [dayId, itemTime, category, title, location, notes, xhsUrl, dianpingUrl, imageUrls]
+    [dayId, startTime, endTime, category, title, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls]
   );
   if (!result.rowCount) throw httpError(404, '日期不存在');
   res.status(201).json(result.rows[0]);
@@ -292,18 +306,24 @@ app.put('/api/items/:id', async (req, res) => {
   const id = idParam(req.params.id, '行程项 ID');
   const title = requiredText(req.body?.title, '行程标题', 160);
   const category = categories.has(req.body?.category) ? req.body.category : '其他';
-  const itemTime = normalizeTime(req.body?.itemTime);
+  const { startTime, endTime } = normalizeTimeRange(req.body?.startTime ?? req.body?.itemTime, req.body?.endTime);
   const location = cleanText(req.body?.location, 240);
+  const latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
+  const longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
+  if ((latitude === null) !== (longitude === null)) throw httpError(400, '纬度和经度需要同时填写');
+  const coordType = normalizeCoordType(req.body?.coordType);
   const notes = cleanText(req.body?.notes, 5000);
-  const xhsUrl = optionalUrl(req.body?.xhsUrl, '小红书链接');
-  const dianpingUrl = optionalUrl(req.body?.dianpingUrl, '大众点评链接');
   const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
+  const linkUrls = normalizeLinkUrls(req.body?.links || [], '参考链接', 12);
+  const links = await resolveLinkMetadata(linkUrls);
+
   const result = await pool.query(
     `UPDATE itinerary_items
-        SET item_time = $2, category = $3, title = $4, location = $5, notes = $6,
-            xhs_url = $7, dianping_url = $8, image_urls = $9, updated_at = now()
+        SET item_time = $2, start_time = $2, end_time = $3, category = $4, title = $5,
+            location = $6, latitude = $7, longitude = $8, coord_type = $9, notes = $10,
+            links = $11, image_urls = $12, updated_at = now()
       WHERE id = $1 RETURNING *`,
-    [id, itemTime, category, title, location, notes, xhsUrl, dianpingUrl, imageUrls]
+    [id, startTime, endTime, category, title, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls]
   );
   if (!result.rowCount) throw httpError(404, '行程项不存在');
   res.json(result.rows[0]);

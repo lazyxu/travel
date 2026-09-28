@@ -94,27 +94,43 @@ function imagePreviewHtml(urls = []) {
 }
 
 function itemFormHtml(item = {}) {
+  const startTime = item.start_time || item.item_time || '';
+  const links = itemLinkUrls(item);
   return `
     <div class="stack">
       <div class="field-grid">
-        <label class="field"><span>时间</span><input name="itemTime" type="time" value="${attr(item.item_time || '')}" /></label>
-        <label class="field"><span>类型</span>
-          <select name="category">
-            ${['交通','景点','餐饮','住宿','购物','其他'].map(category => `<option value="${category}" ${item.category === category ? 'selected' : ''}>${categoryMeta(category).icon} ${category}</option>`).join('')}
+        <label class="field"><span>开始时间</span><input name="startTime" type="time" value="${attr(startTime)}" /></label>
+        <label class="field"><span>结束时间</span><input name="endTime" type="time" value="${attr(item.end_time || '')}" /></label>
+      </div>
+      <label class="field"><span>类型</span>
+        <select name="category">
+          ${['交通','景点','餐饮','住宿','购物','其他'].map(category => `<option value="${category}" ${item.category === category ? 'selected' : ''}>${categoryMeta(category).icon} ${category}</option>`).join('')}
+        </select>
+      </label>
+      <label class="field"><span>行程标题 *</span><input name="title" required maxlength="160" value="${attr(item.title || '')}" placeholder="例如：清水寺" /></label>
+      <label class="field"><span>地点 / 地址</span><input name="location" maxlength="240" value="${attr(item.location || '')}" placeholder="例如：京都市东山区清水1丁目294" /></label>
+      <div class="geo-box">
+        <div class="geo-head"><strong>百度地图坐标</strong><span>可选；当天多点路线需要坐标</span></div>
+        <div class="field-grid">
+          <label class="field"><span>纬度 Latitude</span><input name="latitude" type="number" step="any" min="-90" max="90" value="${attr(item.latitude ?? '')}" placeholder="30.274084" /></label>
+          <label class="field"><span>经度 Longitude</span><input name="longitude" type="number" step="any" min="-180" max="180" value="${attr(item.longitude ?? '')}" placeholder="120.15507" /></label>
+        </div>
+        <label class="field"><span>坐标类型</span>
+          <select name="coordType">
+            ${[
+              ['bd09ll', 'BD-09 百度坐标'],
+              ['gcj02', 'GCJ-02 高德/腾讯坐标'],
+              ['wgs84', 'WGS84 GPS 坐标']
+            ].map(([value, label]) => `<option value="${value}" ${(item.coord_type || 'bd09ll') === value ? 'selected' : ''}>${label}</option>`).join('')}
           </select>
         </label>
       </div>
-      <label class="field"><span>行程标题 *</span><input name="title" required maxlength="160" value="${attr(item.title || '')}" placeholder="例如：清水寺" /></label>
-      <label class="field"><span>地点</span><input name="location" maxlength="240" value="${attr(item.location || '')}" placeholder="地址 / 集合点 / 车站" /></label>
       <label class="field"><span>备注</span><textarea name="notes" maxlength="5000" placeholder="预约信息、交通方式、必点菜等">${escapeHtml(item.notes || '')}</textarea></label>
-      <label class="field"><span>小红书链接</span><input name="xhsUrl" inputmode="url" value="${attr(item.xhs_url || '')}" placeholder="可直接粘贴小红书分享文案或链接" /></label>
-      <label class="field"><span>大众点评链接</span><input name="dianpingUrl" inputmode="url" value="${attr(item.dianping_url || '')}" placeholder="可直接粘贴点评链接" /></label>
-      <label class="field">
-        <span>行程图片</span>
-        <textarea name="imageUrls" class="image-url-input" maxlength="24000" placeholder="粘贴图片 URL，每行一张；最多 12 张">${escapeHtml((item.image_urls || []).join('\n'))}</textarea>
-      </label>
+      <label class="field"><span>参考链接</span><textarea name="links" class="link-url-input" maxlength="24000" placeholder="可放小红书、大众点评、官网等；每行一个链接">${escapeHtml(links.join('\n'))}</textarea></label>
+      <p class="form-help">最多 12 个链接。保存时服务端会尝试读取网页标题；读取失败时显示网站域名。</p>
+      <label class="field"><span>行程图片</span><textarea name="imageUrls" class="image-url-input" maxlength="24000" placeholder="粘贴图片 URL，每行一张；最多 12 张">${escapeHtml((item.image_urls || []).join('\n'))}</textarea></label>
       <div class="image-preview" data-image-preview>${imagePreviewHtml(item.image_urls || [])}</div>
-      <p class="form-help">小红书/点评保存时会提取第一个链接；图片支持 http/https 图片 URL，可一次粘贴多行，最多 12 张。</p>
+      <p class="form-help">图片支持 http/https URL，可一次粘贴多行，最多 12 张。</p>
       <div class="form-actions">
         ${item.id ? '<button id="delete-item" class="button danger" type="button">删除</button>' : ''}
         <button class="button primary" type="submit">保存</button>
@@ -126,13 +142,16 @@ function itemFormHtml(item = {}) {
 function openItemForm(day, item = null) {
   openSheet(item ? '编辑行程' : '添加行程', itemFormHtml(item || {}), async form => {
     const payload = {
-      itemTime: form.get('itemTime'),
+      startTime: form.get('startTime'),
+      endTime: form.get('endTime'),
       category: form.get('category'),
       title: form.get('title'),
       location: form.get('location'),
+      latitude: form.get('latitude'),
+      longitude: form.get('longitude'),
+      coordType: form.get('coordType'),
       notes: form.get('notes'),
-      xhsUrl: extractUrl(form.get('xhsUrl')),
-      dianpingUrl: extractUrl(form.get('dianpingUrl')),
+      links: extractUrls(form.get('links'), 12),
       imageUrls: extractUrls(form.get('imageUrls'), 12)
     };
     if (item) await api(`/api/items/${item.id}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -141,12 +160,11 @@ function openItemForm(day, item = null) {
     await refreshCurrent();
     showToast(item ? '行程已更新' : '行程已添加');
   });
+
   const imageInput = el.sheetForm.querySelector('[name="imageUrls"]');
   const imagePreview = el.sheetForm.querySelector('[data-image-preview]');
   if (imageInput && imagePreview) {
-    const renderImagePreview = () => {
-      imagePreview.innerHTML = imagePreviewHtml(extractUrls(imageInput.value, 12));
-    };
+    const renderImagePreview = () => { imagePreview.innerHTML = imagePreviewHtml(extractUrls(imageInput.value, 12)); };
     imageInput.addEventListener('input', renderImagePreview);
     imageInput.addEventListener('paste', () => setTimeout(renderImagePreview, 0));
   }

@@ -138,6 +138,64 @@ function extractUrls(value, maxItems = 12) {
   return urls;
 }
 
+function formatItemTime(item) {
+  const start = item?.start_time || item?.item_time || '';
+  const end = item?.end_time || '';
+  if (start && end) return `${start}–${end}`;
+  return start || '待定';
+}
+
+function itemLinkUrls(item) {
+  const links = Array.isArray(item?.links) ? item.links.map(link => link?.url).filter(Boolean) : [];
+  if (links.length) return links;
+  return [item?.xhs_url, item?.dianping_url].filter(Boolean);
+}
+
+function baiduPointUrl(item) {
+  const src = 'webapp.lazyxu.travel';
+  if (Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude))) {
+    const params = new URLSearchParams({
+      location: `${item.latitude},${item.longitude}`,
+      title: item.title || item.location || '行程地点',
+      content: item.location || item.title || '行程地点',
+      coord_type: item.coord_type || 'bd09ll',
+      output: 'html',
+      src
+    });
+    return `https://api.map.baidu.com/marker?${params.toString()}`;
+  }
+  if (item?.location) {
+    const params = new URLSearchParams({ address: item.location, output: 'html', src });
+    return `https://api.map.baidu.com/geocoder?${params.toString()}`;
+  }
+  return '';
+}
+
+function baiduDayRouteUrl(day) {
+  const points = (day?.items || [])
+    .filter(item => Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude)))
+    .slice(0, 17);
+  if (points.length < 2) return '';
+  const coordType = points[0].coord_type || 'bd09ll';
+  if (points.some(point => (point.coord_type || 'bd09ll') !== coordType)) return '';
+  const pointValue = point => `latlng:${point.latitude},${point.longitude}|name:${point.title || point.location || '行程点'}`;
+  const params = new URLSearchParams({
+    origin: pointValue(points[0]),
+    destination: pointValue(points[points.length - 1]),
+    mode: 'driving',
+    coord_type: coordType,
+    output: 'html',
+    src: 'webapp.lazyxu.travel'
+  });
+  const via = points.slice(1, -1).map(point => ({
+    name: point.title || point.location || '行程点',
+    lat: Number(point.latitude),
+    lng: Number(point.longitude)
+  }));
+  if (via.length) params.set('viaPoints', JSON.stringify({ viaPoints: via }));
+  return `https://api.map.baidu.com/direction?${params.toString()}`;
+}
+
 function openSheet(title, body, onSubmit) {
   el.sheetTitle.textContent = title;
   el.sheetForm.innerHTML = body;

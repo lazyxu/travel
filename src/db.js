@@ -39,20 +39,43 @@ export async function migrate() {
         id BIGSERIAL PRIMARY KEY,
         day_id BIGINT NOT NULL REFERENCES trip_days(id) ON DELETE CASCADE,
         item_time VARCHAR(5) NOT NULL DEFAULT '',
+        start_time VARCHAR(5) NOT NULL DEFAULT '',
+        end_time VARCHAR(5) NOT NULL DEFAULT '',
         category VARCHAR(20) NOT NULL DEFAULT '其他',
         title TEXT NOT NULL,
         location TEXT NOT NULL DEFAULT '',
+        latitude DOUBLE PRECISION,
+        longitude DOUBLE PRECISION,
+        coord_type VARCHAR(10) NOT NULL DEFAULT 'bd09ll',
         notes TEXT NOT NULL DEFAULT '',
         xhs_url TEXT NOT NULL DEFAULT '',
         dianping_url TEXT NOT NULL DEFAULT '',
+        links JSONB NOT NULL DEFAULT '[]'::jsonb,
         image_urls TEXT[] NOT NULL DEFAULT '{}',
         position INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
 
-      ALTER TABLE itinerary_items
-        ADD COLUMN IF NOT EXISTS image_urls TEXT[] NOT NULL DEFAULT '{}';
+      ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS image_urls TEXT[] NOT NULL DEFAULT '{}';
+      ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS start_time VARCHAR(5) NOT NULL DEFAULT '';
+      ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS end_time VARCHAR(5) NOT NULL DEFAULT '';
+      ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+      ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+      ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS coord_type VARCHAR(10) NOT NULL DEFAULT 'bd09ll';
+      ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+      UPDATE itinerary_items
+         SET start_time = item_time
+       WHERE start_time = '' AND item_time <> '';
+
+      UPDATE itinerary_items
+         SET links =
+           (CASE WHEN xhs_url <> '' THEN jsonb_build_array(jsonb_build_object('url', xhs_url, 'title', '小红书')) ELSE '[]'::jsonb END)
+           ||
+           (CASE WHEN dianping_url <> '' THEN jsonb_build_array(jsonb_build_object('url', dianping_url, 'title', '大众点评')) ELSE '[]'::jsonb END)
+       WHERE links = '[]'::jsonb
+         AND (xhs_url <> '' OR dianping_url <> '');
 
       CREATE TABLE IF NOT EXISTS todos (
         id BIGSERIAL PRIMARY KEY,
@@ -67,7 +90,7 @@ export async function migrate() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_trip_days_trip_date ON trip_days(trip_id, day_date);
-      CREATE INDEX IF NOT EXISTS idx_items_day_position ON itinerary_items(day_id, position, item_time);
+      CREATE INDEX IF NOT EXISTS idx_items_day_position ON itinerary_items(day_id, position, start_time, item_time);
       CREATE INDEX IF NOT EXISTS idx_todos_trip_done_position ON todos(trip_id, done, position);
     `);
     await client.query('COMMIT');

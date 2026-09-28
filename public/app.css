@@ -240,3 +240,15 @@ button { color: inherit; }
   .trip-grid { grid-template-columns: 1fr 1fr; }
   .sheet { bottom: 24px; border-radius: 28px; }
 }
+
+.section-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.map-button { text-decoration: none; white-space: nowrap; }
+.geo-meta { margin-top: 4px; color: #9a9e97; font-size: 11px; }
+.map-row { margin-top: 8px; }
+.map-link { display: inline-flex; align-items: center; padding: 6px 9px; border-radius: 999px; background: #eef5ff; color: #2563a6; text-decoration: none; font-size: 12px; font-weight: 750; }
+.link-chip.generic { background: #f1f3f0; color: #4f5751; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.geo-box { padding: 13px; border: 1px solid var(--line); border-radius: 16px; background: #fafbf8; }
+.geo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.geo-head strong { font-size: 13px; }
+.geo-head span { color: var(--muted); font-size: 10px; text-align: right; }
+.link-url-input { min-height: 108px !important; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }

@@ -37,6 +37,22 @@ export function normalizeUrlList(value, field = '图片链接', maxItems = 12) {
   return urls;
 }
 
+export function normalizeLinkUrls(value, field = '参考链接', maxItems = 12) {
+  const source = Array.isArray(value) ? value : [value];
+  const urls = [];
+  for (const entry of source) {
+    const candidate = typeof entry === 'object' && entry !== null ? entry.url : entry;
+    for (const line of String(candidate ?? '').split(/\r?\n/)) {
+      const raw = cleanText(line, 2000);
+      if (!raw) continue;
+      const normalized = optionalUrl(raw, field);
+      if (!urls.includes(normalized)) urls.push(normalized);
+      if (urls.length > maxItems) throw httpError(400, `${field}最多支持 ${maxItems} 个`);
+    }
+  }
+  return urls;
+}
+
 export function validDate(value, field) {
   const text = cleanText(value, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(`${text}T00:00:00Z`))) {
@@ -62,6 +78,31 @@ export function normalizeTime(value) {
   if (!text) return '';
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(text)) throw httpError(400, '时间格式应为 HH:MM');
   return text;
+}
+
+export function normalizeTimeRange(startValue, endValue) {
+  const startTime = normalizeTime(startValue);
+  const endTime = normalizeTime(endValue);
+  if (endTime && !startTime) throw httpError(400, '设置结束时间时必须同时设置开始时间');
+  if (startTime && endTime && endTime < startTime) throw httpError(400, '结束时间不能早于开始时间');
+  return { startTime, endTime };
+}
+
+export function normalizeCoordinate(value, field, min, max) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < min || number > max) {
+    throw httpError(400, `${field}必须在 ${min} 到 ${max} 之间`);
+  }
+  return Math.round(number * 1e7) / 1e7;
+}
+
+export function normalizeCoordType(value) {
+  const type = cleanText(value, 10).toLowerCase() || 'bd09ll';
+  if (!new Set(['bd09ll', 'gcj02', 'wgs84']).has(type)) {
+    throw httpError(400, '坐标类型仅支持 BD-09、GCJ-02 或 WGS84');
+  }
+  return type;
 }
 
 export function toBoolean(value) {

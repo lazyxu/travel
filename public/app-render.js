@@ -109,7 +109,10 @@ function renderItinerary() {
           <h2>${escapeHtml(day.title || `${formatDate(day.day_date)} ${weekday(day.day_date)}`)}</h2>
           ${day.notes ? `<div class="section-subtitle">${escapeHtml(day.notes)}</div>` : ''}
         </div>
-        <button id="edit-day" class="button ghost small" type="button">编辑当天</button>
+        <div class="section-actions">
+          ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}" target="_blank" rel="noopener noreferrer">🗺 百度地图路线</a>` : ''}
+          <button id="edit-day" class="button ghost small" type="button">编辑当天</button>
+        </div>
       </div>
       <div class="timeline">
         ${day.items.length ? day.items.map(item => itemCardHtml(item)).join('') : `
@@ -146,9 +149,11 @@ function renderItinerary() {
 function itemCardHtml(item) {
   const category = categoryMeta(item.category);
   const images = Array.isArray(item.image_urls) ? item.image_urls : [];
+  const links = Array.isArray(item.links) ? item.links : [];
+  const mapUrl = baiduPointUrl(item);
   return `
     <article class="timeline-card">
-      <div class="timeline-time ${item.item_time ? '' : 'muted'}">${escapeHtml(item.item_time || '待定')}</div>
+      <div class="timeline-time ${(item.start_time || item.item_time) ? '' : 'muted'}">${escapeHtml(formatItemTime(item))}</div>
       <div class="timeline-content">
         <div class="timeline-top">
           <span class="category"><span class="category-icon" aria-hidden="true">${category.icon}</span>${escapeHtml(category.label)}</span>
@@ -158,6 +163,8 @@ function itemCardHtml(item) {
         </div>
         <h3>${escapeHtml(item.title)}</h3>
         ${item.location ? `<div class="location">📍 ${escapeHtml(item.location)}</div>` : ''}
+        ${(item.latitude !== null && item.longitude !== null) ? `<div class="geo-meta">${escapeHtml(String(item.latitude))}, ${escapeHtml(String(item.longitude))} · ${escapeHtml((item.coord_type || 'bd09ll').toUpperCase())}</div>` : ''}
+        ${mapUrl ? `<div class="map-row"><a class="map-link" href="${attr(mapUrl)}" target="_blank" rel="noopener noreferrer">百度地图打开 ↗</a></div>` : ''}
         ${images.length ? `
           <div class="item-gallery item-gallery-${Math.min(images.length, 3)}">
             ${images.slice(0, 6).map((url, index) => `
@@ -169,10 +176,9 @@ function itemCardHtml(item) {
           </div>
         ` : ''}
         ${item.notes ? `<div class="item-notes">${escapeHtml(item.notes)}</div>` : ''}
-        ${(item.xhs_url || item.dianping_url) ? `
+        ${links.length ? `
           <div class="link-row">
-            ${item.xhs_url ? `<a class="link-chip" href="${attr(item.xhs_url)}" target="_blank" rel="noopener noreferrer">小红书 ↗</a>` : ''}
-            ${item.dianping_url ? `<a class="link-chip dp" href="${attr(item.dianping_url)}" target="_blank" rel="noopener noreferrer">大众点评 ↗</a>` : ''}
+            ${links.map(link => `<a class="link-chip generic" href="${attr(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.title || '参考链接')} ↗</a>`).join('')}
           </div>
         ` : ''}
       </div>
