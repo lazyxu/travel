@@ -76,6 +76,23 @@ function openDayForm(day) {
   });
 }
 
+function imagePreviewHtml(urls = []) {
+  const images = Array.isArray(urls) ? urls : [];
+  if (!images.length) {
+    return '<div class="image-preview-empty">暂无图片，粘贴图片 URL 后会在这里预览</div>';
+  }
+  return `
+    <div class="image-preview-grid">
+      ${images.map((url, index) => `
+        <a class="image-preview-link" href="${attr(url)}" target="_blank" rel="noopener noreferrer" aria-label="预览图片 ${index + 1}">
+          <img src="${attr(url)}" alt="图片预览 ${index + 1}" loading="lazy" decoding="async" />
+        </a>
+      `).join('')}
+    </div>
+    <div class="image-preview-count">${images.length} / 12 张</div>
+  `;
+}
+
 function itemFormHtml(item = {}) {
   return `
     <div class="stack">
@@ -83,7 +100,7 @@ function itemFormHtml(item = {}) {
         <label class="field"><span>时间</span><input name="itemTime" type="time" value="${attr(item.item_time || '')}" /></label>
         <label class="field"><span>类型</span>
           <select name="category">
-            ${['交通','景点','餐饮','住宿','购物','其他'].map(category => `<option ${item.category === category ? 'selected' : ''}>${category}</option>`).join('')}
+            ${['交通','景点','餐饮','住宿','购物','其他'].map(category => `<option value="${category}" ${item.category === category ? 'selected' : ''}>${categoryMeta(category).icon} ${category}</option>`).join('')}
           </select>
         </label>
       </div>
@@ -92,7 +109,12 @@ function itemFormHtml(item = {}) {
       <label class="field"><span>备注</span><textarea name="notes" maxlength="5000" placeholder="预约信息、交通方式、必点菜等">${escapeHtml(item.notes || '')}</textarea></label>
       <label class="field"><span>小红书链接</span><input name="xhsUrl" inputmode="url" value="${attr(item.xhs_url || '')}" placeholder="可直接粘贴小红书分享文案或链接" /></label>
       <label class="field"><span>大众点评链接</span><input name="dianpingUrl" inputmode="url" value="${attr(item.dianping_url || '')}" placeholder="可直接粘贴点评链接" /></label>
-      <p class="form-help">保存时会自动从分享文案中提取第一个 http/https 链接。</p>
+      <label class="field">
+        <span>行程图片</span>
+        <textarea name="imageUrls" class="image-url-input" maxlength="24000" placeholder="粘贴图片 URL，每行一张；最多 12 张">${escapeHtml((item.image_urls || []).join('\n'))}</textarea>
+      </label>
+      <div class="image-preview" data-image-preview>${imagePreviewHtml(item.image_urls || [])}</div>
+      <p class="form-help">小红书/点评保存时会提取第一个链接；图片支持 http/https 图片 URL，可一次粘贴多行，最多 12 张。</p>
       <div class="form-actions">
         ${item.id ? '<button id="delete-item" class="button danger" type="button">删除</button>' : ''}
         <button class="button primary" type="submit">保存</button>
@@ -110,7 +132,8 @@ function openItemForm(day, item = null) {
       location: form.get('location'),
       notes: form.get('notes'),
       xhsUrl: extractUrl(form.get('xhsUrl')),
-      dianpingUrl: extractUrl(form.get('dianpingUrl'))
+      dianpingUrl: extractUrl(form.get('dianpingUrl')),
+      imageUrls: extractUrls(form.get('imageUrls'), 12)
     };
     if (item) await api(`/api/items/${item.id}`, { method: 'PUT', body: JSON.stringify(payload) });
     else await api(`/api/days/${day.id}/items`, { method: 'POST', body: JSON.stringify(payload) });
@@ -118,6 +141,16 @@ function openItemForm(day, item = null) {
     await refreshCurrent();
     showToast(item ? '行程已更新' : '行程已添加');
   });
+  const imageInput = el.sheetForm.querySelector('[name="imageUrls"]');
+  const imagePreview = el.sheetForm.querySelector('[data-image-preview]');
+  if (imageInput && imagePreview) {
+    const renderImagePreview = () => {
+      imagePreview.innerHTML = imagePreviewHtml(extractUrls(imageInput.value, 12));
+    };
+    imageInput.addEventListener('input', renderImagePreview);
+    imageInput.addEventListener('paste', () => setTimeout(renderImagePreview, 0));
+  }
+
   if (item) {
     el.sheetForm.querySelector('#delete-item').addEventListener('click', async () => {
       if (!confirm(`确定删除“${item.title}”吗？`)) return;
