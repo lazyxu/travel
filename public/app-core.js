@@ -841,7 +841,7 @@ function registerPwa() {
 registerPwa();
 
 function topOpenDialog() {
-  const selectors = ['#action-confirm', '#order-analyzer', '#link-analyzer', '#item-subsheet', '#sheet'];
+  const selectors = ['#action-confirm', '#image-viewer', '#order-analyzer', '#link-analyzer', '#item-subsheet', '#sheet'];
   for (const selector of selectors) {
     const node = document.querySelector(selector);
     if (node && !node.classList.contains('hidden')) return node;

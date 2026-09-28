@@ -173,7 +173,7 @@ function ensureImageViewer() {
   if (viewer) return viewer;
 
   document.body.insertAdjacentHTML('beforeend', `
-    <div id="image-viewer" class="image-viewer hidden" role="dialog" aria-modal="true">
+    <div id="image-viewer" class="image-viewer hidden" role="dialog" aria-modal="true" aria-label="图片预览">
       <button class="image-viewer-close" type="button" data-image-viewer-close aria-label="关闭">×</button>
       <button class="image-viewer-nav prev" type="button" data-image-viewer-prev aria-label="上一张">‹</button>
       <div class="image-viewer-stage" data-image-viewer-stage>
@@ -226,7 +226,9 @@ function openImageViewer(images, index = 0, title = '') {
   const viewer = ensureImageViewer();
   viewer.classList.remove('hidden');
   document.body.classList.add('image-viewer-open');
+  syncDialogBodyLock();
   renderImageViewer();
+  focusDialogInitial(viewer, viewer.querySelector('[data-image-viewer-close]'));
 
   const stage = viewer.querySelector('[data-image-viewer-stage]');
   let startX = null;
@@ -245,8 +247,13 @@ function openImageViewer(images, index = 0, title = '') {
 }
 
 function closeImageViewer() {
-  document.querySelector('#image-viewer')?.classList.add('hidden');
+  const viewer = document.querySelector('#image-viewer');
+  if (!viewer || viewer.classList.contains('hidden')) return;
+  viewer.classList.add('hidden');
+  viewer.querySelector('[data-image-viewer-img]')?.removeAttribute('src');
   document.body.classList.remove('image-viewer-open');
+  syncDialogBodyLock();
+  restoreDialogFocus(viewer);
 }
 
 function bindImageViewerActions() {
