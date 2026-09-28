@@ -341,8 +341,8 @@ function bindItemLocationEditor(subForm, mainForm) {
     mapAction.innerHTML = url ? `<a class="map-link" href="${attr(url)}">在百度地图打开 ↗</a>` : '<span>尚未定位</span>';
   };
 
-  subForm.querySelector('[data-location-parse]')?.addEventListener('click', async event => {
-    const button = event.currentTarget;
+  const parseLocationLink = async () => {
+    const button = subForm.querySelector('[data-location-parse]');
     const value = field('baiduMapLink')?.value?.trim();
     if (!value) return showToast('请先粘贴百度地图链接', 'error');
     const region = field('poiRegion')?.value?.trim() || state.current?.trip?.destination || '';
@@ -367,10 +367,17 @@ function bindItemLocationEditor(subForm, mainForm) {
       button.disabled = false;
       button.textContent = '解析';
     }
+  };
+
+  subForm.querySelector('[data-location-parse]')?.addEventListener('click', parseLocationLink);
+  field('baiduMapLink')?.addEventListener('paste', () => {
+    setTimeout(() => {
+      if (field('baiduMapLink')?.value?.trim()) parseLocationLink().catch(error => showToast(error.message, 'error'));
+    }, 0);
   });
 
-  subForm.querySelector('[data-location-search]')?.addEventListener('click', async event => {
-    const button = event.currentTarget;
+  const searchLocation = async () => {
+    const button = subForm.querySelector('[data-location-search]');
     const query = field('poiQuery')?.value?.trim();
     const region = field('poiRegion')?.value?.trim();
     if (!query || !region) return showToast('请填写搜索关键词和城市', 'error');
@@ -410,7 +417,16 @@ function bindItemLocationEditor(subForm, mainForm) {
       button.disabled = false;
       button.textContent = '搜索';
     }
-  });
+  };
+
+  subForm.querySelector('[data-location-search]')?.addEventListener('click', searchLocation);
+  for (const inputName of ['poiQuery', 'poiRegion']) {
+    field(inputName)?.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      searchLocation().catch(error => showToast(error.message, 'error'));
+    });
+  }
 
   subForm.querySelector('[data-clear-location]')?.addEventListener('click', () => {
     ['locationName', 'location', 'locationUid', 'latitude', 'longitude'].forEach(name => { field(name).value = ''; });
