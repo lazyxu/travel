@@ -157,6 +157,7 @@ function structuredDetailsHtml(item) {
           ${(d.checkOutDate || d.checkOutTime) ? `<div><span>退房</span><strong>${escapeHtml(formatStructuredDateTime(d.checkOutDate, d.checkOutTime))}</strong></div>` : ''}
           ${d.roomType ? `<div><span>房型</span><strong>${escapeHtml(d.roomType)}</strong></div>` : ''}
           ${d.bookingPlatform ? `<div><span>预订</span><strong>${escapeHtml(d.bookingPlatform)}</strong></div>` : ''}
+          ${d.bookingUrl ? `<div class="structured-wide"><span>预订链接</span><a class="booking-link" href="${attr(d.bookingUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(d.bookingPlatform || '打开预订')} ↗</a></div>` : ''}
           ${d.confirmationNo ? `<div><span>确认号</span><strong>${escapeHtml(d.confirmationNo)}</strong></div>` : ''}
           ${d.phone ? `<div><span>电话</span><strong>${escapeHtml(d.phone)}</strong></div>` : ''}
         </div>
@@ -215,7 +216,7 @@ function hotelStayAnchorHtml(item, { readonly = false } = {}) {
         </div>
         <h3>${escapeHtml(hotelName)}</h3>
         ${itemLocationLabel(item) && itemLocationLabel(item) !== hotelName ? `<div class="location">📍 ${escapeHtml(itemLocationLabel(item))}</div>` : ''}
-        ${item.location_name && item.location ? `<div class="location-address">${escapeHtml(item.location)}</div>` : ''}
+        ${item.details?.bookingUrl ? `<div class="hotel-booking-row"><a class="booking-link" href="${attr(item.details.bookingUrl)}" target="_blank" rel="noopener noreferrer">🔗 ${escapeHtml(item.details.bookingPlatform || '酒店预订')} ↗</a></div>` : ''}
         ${showExpense ? inlineExpenseHtml(item, { readonly }) : ''}
       </div>
     </article>
@@ -242,14 +243,13 @@ function itemCardHtml(item, { readonly = false } = {}) {
         <h3>${escapeHtml(item.title)}</h3>
         ${structuredDetailsHtml(item)}
         ${displayLocation ? `<div class="location">📍 ${escapeHtml(displayLocation)}</div>` : ''}
-        ${item.location_name && item.location && item.location_name !== item.location ? `<div class="location-address">${escapeHtml(item.location)}</div>` : ''}
         ${images.length ? `
           <div class="item-gallery item-gallery-${Math.min(images.length, 3)}">
-            ${images.slice(0, 6).map((url, index) => `
-              <a class="item-image-link" href="${attr(url)}" target="_blank" rel="noopener noreferrer" aria-label="查看图片 ${index + 1}">
+            ${images.slice(0, 3).map((url, index) => `
+              <button class="item-image-link" type="button" data-gallery-item="${attr(item.id)}" data-gallery-index="${index}" aria-label="查看图片 ${index + 1}">
                 <img class="item-image" src="${attr(url)}" alt="${attr(item.title)} 图片 ${index + 1}" loading="lazy" decoding="async" />
-                ${index === 5 && images.length > 6 ? `<span class="image-more">+${images.length - 6}</span>` : ''}
-              </a>
+                ${index === 2 && images.length > 3 ? `<span class="image-more">+${images.length - 3}</span>` : ''}
+              </button>
             `).join('')}
           </div>
         ` : ''}
@@ -257,22 +257,17 @@ function itemCardHtml(item, { readonly = false } = {}) {
         ${links.length ? `
           <div class="link-row">
             ${links.map(link => {
-              const href = link.url || link.value || '';
-              const platformName = link.platform || detectReferencePlatform(href);
-              const platform = referencePlatformMeta(platformName);
-              const label = `${platform.icon} ${link.title || platform.label}`;
-              if (link.kind === 'copy') {
-                return `<button class="link-chip generic platform-${attr(platformName)}" type="button" data-copy-reference="${attr(link.value || '')}">${escapeHtml(label)} · 复制口令</button>`;
+              const action = referenceActionMeta(link);
+              if (action.type === 'copy') {
+                return `<button class="link-chip generic platform-${attr(action.platform)}" type="button" data-copy-reference="${attr(action.value)}">${escapeHtml(action.label)}</button>`;
               }
-              if (platformName === 'wechat' && link.kind === 'uri') {
-                return `<button class="link-chip generic platform-wechat" type="button" data-open-wechat-scheme="${attr(href)}">${escapeHtml(label)} · 打开小程序</button>`;
+              if (action.type === 'wechat-scheme') {
+                return `<button class="link-chip generic platform-wechat" type="button" data-open-wechat-scheme="${attr(action.href)}">${escapeHtml(action.label)}</button>`;
               }
-              if (platformName === 'dianping') {
-                const appHref = link.appUrl || dianpingClientAppUrl(href, link.title || platform.label);
-                return `<a class="link-chip generic platform-dianping app-deep-link" href="${attr(appHref)}">${escapeHtml(label)} · 打开 App</a>`;
+              if (action.type === 'app') {
+                return `<a class="link-chip generic platform-${attr(action.platform)} app-deep-link" href="${attr(action.href)}">${escapeHtml(action.label)}</a>`;
               }
-              const suffix = platformName === 'wechat' ? ' · 打开小程序' : ' ↗';
-              return `<a class="link-chip generic platform-${attr(platformName)}" href="${attr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}${suffix}</a>`;
+              return `<a class="link-chip generic platform-${attr(action.platform)}" href="${attr(action.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`;
             }).join('')}
           </div>
         ` : ''}
@@ -357,6 +352,7 @@ function bindHero() {
 
 
 function bindReferenceActions() {
+  bindImageViewerActions();
   el.main.querySelectorAll('[data-open-wechat-scheme]').forEach(button => {
     button.addEventListener('click', async () => {
       const value = button.dataset.openWechatScheme || '';
