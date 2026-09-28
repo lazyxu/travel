@@ -59,9 +59,15 @@ async function openTrip(id) {
 async function refreshCurrent() {
   if (!state.current?.trip?.id) return;
   const id = state.current.trip.id;
-  state.current = await api(`/api/trips/${id}`);
+  const path = window.location.pathname;
+  const current = await api(`/api/trips/${id}`);
+
+  if (window.location.pathname !== path) return;
+  if (String(state.current?.trip?.id || '') !== String(id)) return;
+
+  state.current = current;
   if (state.tab === 'itinerary' && !state.current.days.some(day => String(day.id) === String(state.currentDayId))) {
-    state.currentDayId = state.current.days[0]?.id || null;
+    state.currentDayId = defaultTripDay(state.current.days)?.id || null;
   }
   syncCurrentUrl({ replace: true });
   renderCurrent();
