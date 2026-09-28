@@ -1,5 +1,5 @@
 function tripFormHtml(trip = {}) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   return `
     <div class="stack">
       <label class="field"><span>旅行名称 *</span><input name="title" required maxlength="120" value="${attr(trip.title || '')}" placeholder="例如：京都红叶 5 日" /></label>
@@ -49,12 +49,26 @@ function openTripForm(trip = null) {
       showToast('旅行已创建');
     }
   });
+
+  const startInput = el.sheetForm.querySelector('[name="startDate"]');
+  const endInput = el.sheetForm.querySelector('[name="endDate"]');
+  const syncTripDates = () => {
+    if (!startInput || !endInput) return;
+    endInput.min = startInput.value || '';
+    if (startInput.value && endInput.value && endInput.value < startInput.value) {
+      endInput.value = startInput.value;
+    }
+  };
+  startInput?.addEventListener('change', syncTripDates);
+  syncTripDates();
+
   if (trip) {
-    el.sheetForm.querySelector('#delete-trip').addEventListener('click', async () => {
+    el.sheetForm.querySelector('#delete-trip').addEventListener('click', async event => {
       if (!confirm(`确定删除“${trip.title}”及全部行程和待办吗？`)) return;
       try {
         await api(`/api/trips/${trip.id}`, { method: 'DELETE' });
-        closeSheet();
+        setButtonBusy(event.currentTarget, true, '删除中…');
+        closeSheet(true);
         await navigate('/');
         showToast('旅行已删除');
       } catch (error) {
@@ -157,11 +171,12 @@ function openExpenseForm(expense = null, linkedItem = null) {
   });
 
   if (expense) {
-    el.sheetForm.querySelector('#delete-expense').addEventListener('click', async () => {
+    el.sheetForm.querySelector('#delete-expense').addEventListener('click', async event => {
       if (!confirm(`确定删除“${expense.title}”吗？`)) return;
       try {
         await api(`/api/expenses/${expense.id}`, { method: 'DELETE' });
-        closeSheet();
+        setButtonBusy(event.currentTarget, true, '删除中…');
+        closeSheet(true);
         await refreshCurrent();
         showToast('费用已删除');
       } catch (error) {
@@ -200,11 +215,12 @@ function openTodoForm(todo = null) {
     showToast(todo ? '待办已更新' : '待办已添加');
   });
   if (todo) {
-    el.sheetForm.querySelector('#delete-todo').addEventListener('click', async () => {
+    el.sheetForm.querySelector('#delete-todo').addEventListener('click', async event => {
       if (!confirm(`确定删除“${todo.title}”吗？`)) return;
       try {
         await api(`/api/todos/${todo.id}`, { method: 'DELETE' });
-        closeSheet();
+        setButtonBusy(event.currentTarget, true, '删除中…');
+        closeSheet(true);
         await refreshCurrent();
         showToast('待办已删除');
       } catch (error) { showToast(error.message, 'error'); }
@@ -214,6 +230,8 @@ function openTodoForm(todo = null) {
 
 el.loginForm.addEventListener('submit', async event => {
   event.preventDefault();
+  const submit = event.submitter || el.loginForm.querySelector('[type="submit"]');
+  setButtonBusy(submit, true, '登录中…');
   try {
     await api('/api/login', { method: 'POST', body: JSON.stringify({ password: el.loginPassword.value }) });
     el.loginPassword.value = '';
@@ -221,6 +239,7 @@ el.loginForm.addEventListener('submit', async event => {
     await loadRoute();
   } catch (error) {
     showToast(error.message, 'error');
+    setButtonBusy(submit, false);
   }
 });
 

@@ -2566,3 +2566,27 @@ body.dialog-open{
   background: #f1f7f4;
   color: var(--accent);
 }
+
+
+/* Form busy feedback */
+.button.is-busy{
+  cursor: wait;
+}
+.button.is-busy::after{
+  content: '';
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-left: 7px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: button-busy-spin .7s linear infinite;
+}
+@keyframes button-busy-spin{
+  to{ transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce){
+  .button.is-busy::after{ animation: none; }
+}

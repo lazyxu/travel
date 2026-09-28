@@ -1399,12 +1399,13 @@ function openItemForm(day, item = null) {
   bindCompactItemEditor(mainForm, item || {});
 
   if (item) {
-    mainForm.querySelector('#delete-item')?.addEventListener('click', async () => {
+    mainForm.querySelector('#delete-item')?.addEventListener('click', async event => {
       if (!confirm(`确定删除“${item.title}”吗？`)) return;
       try {
+        setButtonBusy(event.currentTarget, true, '删除中…');
         await api(`/api/items/${item.id}`, { method: 'DELETE' });
         closeItemSubsheet(true);
-        closeSheet();
+        closeSheet(true);
         await refreshCurrent();
         showToast('行程已删除');
       } catch (error) {
