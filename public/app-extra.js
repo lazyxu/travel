@@ -98,7 +98,22 @@ function tripExpenseSummaryHtml() {
   `;
 }
 
-async function bindItineraryActions(day) {
+async function bindDisclosureMenus(root = el.main) {
+  const menus = [...root.querySelectorAll('.item-action-menu, .leg-mode-menu')];
+  menus.forEach(menu => {
+    menu.addEventListener('toggle', () => {
+      if (!menu.open) return;
+      menus.forEach(other => {
+        if (other !== menu) other.removeAttribute('open');
+      });
+    });
+    menu.querySelectorAll('button').forEach(button => {
+      button.addEventListener('click', () => menu.removeAttribute('open'));
+    });
+  });
+}
+
+function bindItineraryActions(day) {
   el.main.querySelectorAll('[data-leg-mode-value]').forEach(button => {
     button.addEventListener('click', async () => {
       const group = button.closest('[data-leg-drop]');

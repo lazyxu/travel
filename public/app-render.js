@@ -155,6 +155,7 @@ function renderItinerary() {
 
   bindHero();
   bindReferenceActions();
+  bindDisclosureMenus();
   el.main.querySelectorAll('[data-day-id]').forEach(button => {
     button.addEventListener('click', () => {
       navigate(`/trips/${state.current.trip.id}/day/${button.dataset.dayId}`);

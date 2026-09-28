@@ -1608,3 +1608,16 @@ textarea {
     justify-self: start;
   }
 }
+
+
+/* 2026-09-28 UI polish: reorder interaction guard */
+.reorder-mode .leg-mode-menu,
+.reorder-mode .leg-map-link,
+.reorder-mode .leg-map-unavailable {
+  pointer-events: none;
+}
+.reorder-mode .leg-route-chip,
+.reorder-mode .leg-map-link,
+.reorder-mode .leg-map-unavailable {
+  opacity: .58;
+}
