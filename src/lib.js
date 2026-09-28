@@ -37,20 +37,36 @@ export function normalizeUrlList(value, field = '图片链接', maxItems = 12) {
   return urls;
 }
 
-export function normalizeLinkUrls(value, field = '参考链接', maxItems = 12) {
+export function normalizeReferences(value, maxItems = 12) {
   const source = Array.isArray(value) ? value : [value];
-  const urls = [];
+  const refs = [];
+
   for (const entry of source) {
-    const candidate = typeof entry === 'object' && entry !== null ? entry.url : entry;
-    for (const line of String(candidate ?? '').split(/\r?\n/)) {
-      const raw = cleanText(line, 2000);
-      if (!raw) continue;
-      const normalized = optionalUrl(raw, field);
-      if (!urls.includes(normalized)) urls.push(normalized);
-      if (urls.length > maxItems) throw httpError(400, `${field}最多支持 ${maxItems} 个`);
+    const candidate = typeof entry === 'object' && entry !== null
+      ? (entry.value || entry.url || '')
+      : entry;
+    const raw = cleanText(candidate, 3000);
+    if (!raw) continue;
+
+    const httpMatch = raw.match(/https?:\/\/[^\s]+/i);
+    let ref;
+    if (httpMatch) {
+      const url = optionalUrl(httpMatch[0].replace(/[),，。；;]+$/g, ''), '参考链接');
+      ref = { kind: 'url', url, value: url };
+    } else if (/^weixin:\/\//i.test(raw)) {
+      ref = { kind: 'uri', url: raw, value: raw };
+    } else if (/(?:#)?小程序:\/\//i.test(raw)) {
+      ref = { kind: 'copy', value: raw };
+    } else {
+      throw httpError(400, '参考入口仅支持网页链接、weixin:// 链接或微信小程序口令');
     }
+
+    const key = `${ref.kind}:${ref.value}`;
+    if (!refs.some(item => `${item.kind}:${item.value}` === key)) refs.push(ref);
+    if (refs.length > maxItems) throw httpError(400, `参考入口最多支持 ${maxItems} 个`);
   }
-  return urls;
+
+  return refs;
 }
 
 export function validDate(value, field) {

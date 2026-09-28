@@ -29,17 +29,13 @@ function openTripForm(trip = null) {
     if (trip) {
       await api(`/api/trips/${trip.id}`, { method: 'PUT', body: JSON.stringify(payload) });
       closeSheet();
-      await openTrip(trip.id);
+      await loadRoute();
       showToast('旅行已更新');
     } else {
       const created = await api('/api/trips', { method: 'POST', body: JSON.stringify(payload) });
       closeSheet();
-      state.current = created;
-      state.currentDayId = created.days[0]?.id || null;
-      state.tab = 'itinerary';
-      el.backHome.classList.remove('hidden');
-      el.bottomNav.classList.remove('hidden');
-      renderCurrent();
+      const firstDay = created.days[0]?.id;
+      await navigate(firstDay ? `/trips/${created.trip.id}/day/${firstDay}` : `/trips/${created.trip.id}/todos`);
       showToast('旅行已创建');
     }
   });
@@ -49,7 +45,7 @@ function openTripForm(trip = null) {
       try {
         await api(`/api/trips/${trip.id}`, { method: 'DELETE' });
         closeSheet();
-        await loadTrips();
+        await navigate('/');
         showToast('旅行已删除');
       } catch (error) {
         showToast(error.message, 'error');
@@ -95,7 +91,7 @@ function imagePreviewHtml(urls = []) {
 
 function itemFormHtml(item = {}) {
   const startTime = item.start_time || item.item_time || '';
-  const links = itemLinkUrls(item);
+  const links = itemReferenceValues(item);
   return `
     <div class="stack">
       <div class="field-grid">
@@ -108,6 +104,15 @@ function itemFormHtml(item = {}) {
         </select>
       </label>
       <label class="field"><span>行程标题 *</span><input name="title" required maxlength="160" value="${attr(item.title || '')}" placeholder="例如：清水寺" /></label>
+      <div class="poi-search-box">
+        <div class="poi-search-head"><strong>搜索百度地点</strong><span>选择后自动填写地址和 BD-09 坐标</span></div>
+        <div class="poi-search-row">
+          <input name="poiQuery" maxlength="45" placeholder="输入景点、餐厅、酒店等" />
+          <input name="poiRegion" maxlength="50" value="${attr(state.current?.trip?.destination || '')}" placeholder="城市，如：杭州" />
+          <button id="poi-search-button" class="button ghost small" type="button">搜索</button>
+        </div>
+        <div class="poi-results hidden" data-poi-results></div>
+      </div>
       <label class="field"><span>地点 / 地址</span><input name="location" maxlength="240" value="${attr(item.location || '')}" placeholder="例如：京都市东山区清水1丁目294" /></label>
       <div class="geo-box">
         <div class="geo-head"><strong>百度地图坐标</strong><span>可选；当天多点路线需要坐标</span></div>
@@ -126,8 +131,8 @@ function itemFormHtml(item = {}) {
         </label>
       </div>
       <label class="field"><span>备注</span><textarea name="notes" maxlength="5000" placeholder="预约信息、交通方式、必点菜等">${escapeHtml(item.notes || '')}</textarea></label>
-      <label class="field"><span>参考链接</span><textarea name="links" class="link-url-input" maxlength="24000" placeholder="可放小红书、大众点评、官网等；每行一个链接">${escapeHtml(links.join('\n'))}</textarea></label>
-      <p class="form-help">最多 12 个链接。保存时服务端会尝试读取网页标题；读取失败时显示网站域名。</p>
+      <label class="field"><span>参考入口</span><textarea name="references" class="link-url-input" maxlength="30000" placeholder="支持微信小程序、抖音、美团、大众点评、小红书、闲鱼和普通网页；每行一个">${escapeHtml(links.join('\n'))}</textarea></label>
+      <p class="form-help">最多 12 个。网页会自动识别平台并尝试提取标题；微信小程序可粘贴 #小程序://... 口令，保存后可一键复制。</p>
       <label class="field"><span>行程图片</span><textarea name="imageUrls" class="image-url-input" maxlength="24000" placeholder="粘贴图片 URL，每行一张；最多 12 张">${escapeHtml((item.image_urls || []).join('\n'))}</textarea></label>
       <div class="image-preview" data-image-preview>${imagePreviewHtml(item.image_urls || [])}</div>
       <p class="form-help">图片支持 http/https URL，可一次粘贴多行，最多 12 张。</p>
@@ -151,7 +156,7 @@ function openItemForm(day, item = null) {
       longitude: form.get('longitude'),
       coordType: form.get('coordType'),
       notes: form.get('notes'),
-      links: extractUrls(form.get('links'), 12),
+      references: extractReferenceInputs(form.get('references'), 12),
       imageUrls: extractUrls(form.get('imageUrls'), 12)
     };
     if (item) await api(`/api/items/${item.id}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -160,6 +165,56 @@ function openItemForm(day, item = null) {
     await refreshCurrent();
     showToast(item ? '行程已更新' : '行程已添加');
   });
+
+  const poiSearchButton = el.sheetForm.querySelector('#poi-search-button');
+  const poiResults = el.sheetForm.querySelector('[data-poi-results]');
+  if (poiSearchButton && poiResults) {
+    poiSearchButton.addEventListener('click', async () => {
+      const query = el.sheetForm.querySelector('[name="poiQuery"]')?.value?.trim();
+      const region = el.sheetForm.querySelector('[name="poiRegion"]')?.value?.trim();
+      if (!query || !region) {
+        showToast('请填写搜索关键词和城市', 'error');
+        return;
+      }
+      poiSearchButton.disabled = true;
+      poiSearchButton.textContent = '搜索中…';
+      try {
+        const params = new URLSearchParams({ query, region });
+        const data = await api(`/api/baidu/poi/search?${params.toString()}`);
+        const results = data?.results || [];
+        poiResults.classList.remove('hidden');
+        poiResults.innerHTML = results.length ? results.map((poi, index) => `
+          <button class="poi-result" type="button" data-poi-index="${index}">
+            <strong>${escapeHtml(poi.name)}</strong>
+            <span>${escapeHtml([poi.city, poi.district, poi.address].filter(Boolean).join(' · '))}</span>
+          </button>
+        `).join('') : '<div class="poi-empty">没有找到匹配地点</div>';
+        poiResults.querySelectorAll('[data-poi-index]').forEach(button => {
+          button.addEventListener('click', () => {
+            const poi = results[Number(button.dataset.poiIndex)];
+            if (!poi) return;
+            const titleInput = el.sheetForm.querySelector('[name="title"]');
+            const locationInput = el.sheetForm.querySelector('[name="location"]');
+            const latInput = el.sheetForm.querySelector('[name="latitude"]');
+            const lngInput = el.sheetForm.querySelector('[name="longitude"]');
+            const coordInput = el.sheetForm.querySelector('[name="coordType"]');
+            if (titleInput && !titleInput.value.trim()) titleInput.value = poi.name || '';
+            if (locationInput) locationInput.value = [poi.city, poi.district, poi.address || poi.name].filter(Boolean).join(' ');
+            if (latInput) latInput.value = poi.location?.lat ?? '';
+            if (lngInput) lngInput.value = poi.location?.lng ?? '';
+            if (coordInput) coordInput.value = 'bd09ll';
+            poiResults.classList.add('hidden');
+            showToast('地点和坐标已填入');
+          });
+        });
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        poiSearchButton.disabled = false;
+        poiSearchButton.textContent = '搜索';
+      }
+    });
+  }
 
   const imageInput = el.sheetForm.querySelector('[name="imageUrls"]');
   const imagePreview = el.sheetForm.querySelector('[data-image-preview]');
@@ -229,25 +284,23 @@ el.loginForm.addEventListener('submit', async event => {
     await api('/api/login', { method: 'POST', body: JSON.stringify({ password: el.loginPassword.value }) });
     el.loginPassword.value = '';
     showApp();
-    await loadTrips();
+    await loadRoute();
   } catch (error) {
     showToast(error.message, 'error');
   }
 });
 
-el.backHome.addEventListener('click', async () => {
-  await loadTrips();
-});
-
-el.logout.addEventListener('click', async () => {
-  try { await api('/api/logout', { method: 'POST' }); } catch {}
-  showLogin();
-});
+el.backHome.addEventListener('click', () => navigate('/'));
 
 el.bottomNav.querySelectorAll('[data-tab]').forEach(button => {
   button.addEventListener('click', () => {
-    state.tab = button.dataset.tab;
-    renderCurrent();
+    if (!state.current?.trip?.id) return;
+    if (button.dataset.tab === 'todos') {
+      navigate(`/trips/${state.current.trip.id}/todos`);
+      return;
+    }
+    const dayId = state.currentDayId || state.current.days[0]?.id;
+    if (dayId) navigate(`/trips/${state.current.trip.id}/day/${dayId}`);
   });
 });
 
@@ -257,12 +310,16 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !el.sheet.classList.contains('hidden')) closeSheet();
 });
 
+window.addEventListener('popstate', () => {
+  loadRoute().catch(error => showToast(error.message, 'error'));
+});
+
 (async function boot() {
   try {
     const auth = await api('/api/auth');
     if (!auth.authenticated) return showLogin();
     showApp();
-    await loadTrips();
+    await loadRoute();
   } catch (error) {
     showToast(error.message, 'error');
     showLogin();

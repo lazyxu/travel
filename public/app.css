@@ -31,18 +31,18 @@ button { color: inherit; }
   z-index: 20;
   top: 0;
   display: grid;
-  grid-template-columns: 44px 1fr 44px;
+  grid-template-columns: 40px 1fr 40px;
   align-items: center;
-  gap: 8px;
-  min-height: 72px;
-  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  gap: 6px;
+  min-height: 54px;
+  padding: calc(6px + env(safe-area-inset-top)) 12px 6px;
   background: rgba(247, 247, 244, 0.92);
   backdrop-filter: blur(18px);
   border-bottom: 1px solid rgba(229, 231, 225, .8);
 }
 .topbar-copy { min-width: 0; }
 .eyebrow { font-size: 10px; letter-spacing: .16em; color: var(--muted); font-weight: 800; }
-.topbar-title { margin-top: 2px; font-size: 19px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-title { margin-top: 0; font-size: 17px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icon-button {
   display: inline-grid;
   place-items: center;
@@ -57,7 +57,7 @@ button { color: inherit; }
 }
 .icon-button:active { background: var(--surface-2); transform: scale(.97); }
 
-.main { width: min(100%, 760px); margin: 0 auto; padding: 14px 16px 28px; }
+.main { width: min(100%, 760px); margin: 0 auto; padding: 8px 16px 24px; }
 .page-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 12px 2px 18px; }
 .page-head h1 { margin: 0; font-size: 31px; line-height: 1.08; letter-spacing: -.04em; }
 .page-head p { margin: 7px 0 0; color: var(--muted); font-size: 14px; }
@@ -252,3 +252,31 @@ button { color: inherit; }
 .geo-head strong { font-size: 13px; }
 .geo-head span { color: var(--muted); font-size: 10px; text-align: right; }
 .link-url-input { min-height: 108px !important; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+.topbar-spacer { width: 40px; height: 40px; }
+.trip-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 11px 12px; margin-bottom: 2px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.trip-summary-copy { min-width: 0; }
+.trip-summary-title { display: block; font-size: 17px; line-height: 1.3; }
+.trip-summary-meta { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.trip-summary-notes { margin-top: 5px; color: #5c605a; font-size: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.poi-search-box { padding: 13px; border: 1px solid var(--line); border-radius: 16px; background: #fafbf8; }
+.poi-search-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+.poi-search-head strong { font-size: 13px; }
+.poi-search-head span { color: var(--muted); font-size: 10px; text-align: right; }
+.poi-search-row { display: grid; grid-template-columns: 1.4fr .9fr auto; gap: 7px; }
+.poi-search-row input { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 10px 11px; background: #fff; }
+.poi-results { display: grid; gap: 6px; margin-top: 9px; max-height: 230px; overflow-y: auto; }
+.poi-result { display: grid; gap: 2px; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: #fff; cursor: pointer; }
+.poi-result strong { font-size: 13px; }
+.poi-result span, .poi-empty { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.link-chip[type="button"] { border: 0; cursor: pointer; }
+.platform-wechat { background: #eef8ef !important; color: #26713a !important; }
+.platform-douyin { background: #f2f1f4 !important; color: #29252d !important; }
+.platform-meituan { background: #fff8d7 !important; color: #806400 !important; }
+.platform-dianping { background: #fff2e8 !important; color: #b75a1d !important; }
+.platform-xhs { background: #fdf0f0 !important; color: #a23d3d !important; }
+.platform-xianyu { background: #fffbe4 !important; color: #866e00 !important; }
+@media (max-width: 520px) {
+  .poi-search-row { grid-template-columns: 1fr auto; }
+  .poi-search-row input[name="poiQuery"] { grid-column: 1 / -1; }
+}

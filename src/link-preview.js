@@ -7,6 +7,16 @@ const MAX_HTML_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 3500;
 const MAX_REDIRECTS = 3;
 
+const PLATFORM_LABELS = {
+  wechat: '微信小程序',
+  douyin: '抖音',
+  meituan: '美团',
+  dianping: '大众点评',
+  xhs: '小红书',
+  xianyu: '闲鱼',
+  web: '网页'
+};
+
 function decodeEntities(value) {
   return String(value || '')
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
@@ -49,6 +59,20 @@ export function extractHtmlTitle(html) {
   return match ? cleanTitle(match[1]) : '';
 }
 
+export function detectPlatform(value) {
+  const raw = String(value || '').toLowerCase();
+  if (raw.startsWith('weixin://') || raw.includes('小程序://')) return 'wechat';
+  let host = '';
+  try { host = new URL(value).hostname.toLowerCase(); } catch {}
+  if (/xiaohongshu\.com$|xhslink\.com$/.test(host)) return 'xhs';
+  if (/douyin\.com$|iesdouyin\.com$/.test(host)) return 'douyin';
+  if (/meituan\.com$|meituan\.net$/.test(host)) return 'meituan';
+  if (/dianping\.com$|dpurl\.cn$/.test(host)) return 'dianping';
+  if (/goofish\.com$|2\.taobao\.com$/.test(host)) return 'xianyu';
+  if (/weixin\.qq\.com$|mp\.weixin\.qq\.com$/.test(host)) return 'wechat';
+  return 'web';
+}
+
 export function isPrivateAddress(address) {
   const ip = String(address || '').toLowerCase();
   const family = net.isIP(ip);
@@ -56,9 +80,7 @@ export function isPrivateAddress(address) {
   if (family === 4) {
     const [a, b] = ip.split('.').map(Number);
     return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
+      a === 0 || a === 10 || a === 127 ||
       (a === 169 && b === 254) ||
       (a === 172 && b >= 16 && b <= 31) ||
       (a === 192 && b === 168) ||
@@ -73,12 +95,10 @@ export function isPrivateAddress(address) {
   return mapped ? isPrivateAddress(mapped[1]) : false;
 }
 
-function fallbackTitle(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./i, '');
-  } catch {
-    return '参考链接';
-  }
+function fallbackTitle(url, platform = 'web') {
+  if (platform !== 'web') return PLATFORM_LABELS[platform] || '参考入口';
+  try { return new URL(url).hostname.replace(/^www\./i, ''); }
+  catch { return '参考入口'; }
 }
 
 async function resolvePublicAddress(hostname) {
@@ -123,14 +143,12 @@ async function requestHtml(urlText, redirectsLeft = MAX_REDIRECTS) {
         requestHtml(new URL(response.headers.location, url).toString(), redirectsLeft - 1).then(resolve, reject);
         return;
       }
-
       const type = String(response.headers['content-type'] || '').toLowerCase();
       if (status < 200 || status >= 300 || (type && !type.includes('text/html') && !type.includes('application/xhtml+xml'))) {
         response.resume();
         reject(new Error(`unexpected response ${status}`));
         return;
       }
-
       const chunks = [];
       let size = 0;
       response.on('data', chunk => {
@@ -143,20 +161,39 @@ async function requestHtml(urlText, redirectsLeft = MAX_REDIRECTS) {
       });
       response.on('end', () => resolve({ html: Buffer.concat(chunks).toString('utf8'), finalUrl: url.toString() }));
     });
-
     req.setTimeout(REQUEST_TIMEOUT_MS, () => req.destroy(new Error('request timeout')));
     req.on('error', reject);
     req.end();
   });
 }
 
-export async function resolveLinkMetadata(urls) {
-  return Promise.all(urls.map(async url => {
+export async function resolveReferenceMetadata(refs) {
+  return Promise.all(refs.map(async ref => {
+    const value = ref.value || ref.url || '';
+    const platform = detectPlatform(value);
+    if (ref.kind === 'copy') {
+      return { kind: 'copy', platform, value, title: PLATFORM_LABELS[platform] || '参考入口' };
+    }
+    if (ref.kind === 'uri') {
+      return { kind: 'uri', platform, value, url: ref.url || value, title: PLATFORM_LABELS[platform] || '参考入口' };
+    }
+
     try {
-      const { html, finalUrl } = await requestHtml(url);
-      return { url, title: extractHtmlTitle(html) || fallbackTitle(finalUrl) };
+      const { html, finalUrl } = await requestHtml(ref.url);
+      const finalPlatform = detectPlatform(finalUrl) || platform;
+      return {
+        kind: 'url',
+        platform: finalPlatform,
+        value: ref.url,
+        url: ref.url,
+        title: extractHtmlTitle(html) || fallbackTitle(finalUrl, finalPlatform)
+      };
     } catch {
-      return { url, title: fallbackTitle(url) };
+      return { kind: 'url', platform, value: ref.url, url: ref.url, title: fallbackTitle(ref.url, platform) };
     }
   }));
+}
+
+export async function resolveLinkMetadata(urls) {
+  return resolveReferenceMetadata(urls.map(url => ({ kind: 'url', url, value: url })));
 }

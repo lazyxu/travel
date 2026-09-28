@@ -1,7 +1,7 @@
 function renderHome() {
   state.current = null;
   state.currentDayId = null;
-  el.topbarTitle.textContent = '我的旅行';
+  el.topbarTitle.textContent = '旅行计划';
   el.backHome.classList.add('hidden');
   el.bottomNav.classList.add('hidden');
 
@@ -36,34 +36,28 @@ function renderHome() {
 
   el.main.querySelector('#create-trip').addEventListener('click', () => openTripForm());
   el.main.querySelectorAll('[data-trip-id]').forEach(card => {
-    card.addEventListener('click', () => openTrip(card.dataset.tripId));
+    card.addEventListener('click', () => navigate(`/trips/${card.dataset.tripId}`));
   });
 }
 
 async function openTrip(id) {
-  state.current = await api(`/api/trips/${id}`);
-  if (!state.currentDayId || !state.current.days.some(day => String(day.id) === String(state.currentDayId))) {
-    state.currentDayId = state.current.days[0]?.id || null;
-  }
-  state.tab = 'itinerary';
-  el.backHome.classList.remove('hidden');
-  el.bottomNav.classList.remove('hidden');
-  renderCurrent();
+  await navigate(`/trips/${id}`);
 }
 
 async function refreshCurrent() {
   if (!state.current?.trip?.id) return;
   const id = state.current.trip.id;
   state.current = await api(`/api/trips/${id}`);
-  if (!state.current.days.some(day => String(day.id) === String(state.currentDayId))) {
+  if (state.tab === 'itinerary' && !state.current.days.some(day => String(day.id) === String(state.currentDayId))) {
     state.currentDayId = state.current.days[0]?.id || null;
   }
+  syncCurrentUrl({ replace: true });
   renderCurrent();
 }
 
 function renderCurrent() {
   if (!state.current) return renderHome();
-  el.topbarTitle.textContent = state.current.trip.title;
+  el.topbarTitle.textContent = state.tab === 'todos' ? '旅行待办' : '每日行程';
   el.bottomNav.querySelectorAll('[data-tab]').forEach(button => {
     button.classList.toggle('active', button.dataset.tab === state.tab);
   });
@@ -74,16 +68,13 @@ function renderCurrent() {
 function heroHtml() {
   const trip = state.current.trip;
   return `
-    <section class="hero">
-      <div class="hero-row">
-        <div>
-          <p>${escapeHtml(trip.destination || '目的地待定')}</p>
-          <h1>${escapeHtml(trip.title)}</h1>
-          <p>${escapeHtml(formatRange(trip.start_date, trip.end_date))}</p>
-        </div>
-        <button id="edit-trip" class="icon-button" type="button" aria-label="编辑旅行">⋯</button>
+    <section class="trip-summary">
+      <div class="trip-summary-copy">
+        <strong class="trip-summary-title">${escapeHtml(trip.title)}</strong>
+        <div class="trip-summary-meta">${escapeHtml([trip.destination, formatRange(trip.start_date, trip.end_date)].filter(Boolean).join(' · '))}</div>
+        ${trip.notes ? `<div class="trip-summary-notes">${escapeHtml(trip.notes)}</div>` : ''}
       </div>
-      ${trip.notes ? `<p class="hero-notes">${escapeHtml(trip.notes)}</p>` : ''}
+      <button id="edit-trip" class="button ghost small" type="button">编辑</button>
     </section>
   `;
 }
@@ -128,10 +119,10 @@ function renderItinerary() {
   `;
 
   bindHero();
+  bindReferenceActions();
   el.main.querySelectorAll('[data-day-id]').forEach(button => {
     button.addEventListener('click', () => {
-      state.currentDayId = button.dataset.dayId;
-      renderItinerary();
+      navigate(`/trips/${state.current.trip.id}/day/${button.dataset.dayId}`);
     });
   });
   if (day) {
@@ -178,7 +169,15 @@ function itemCardHtml(item) {
         ${item.notes ? `<div class="item-notes">${escapeHtml(item.notes)}</div>` : ''}
         ${links.length ? `
           <div class="link-row">
-            ${links.map(link => `<a class="link-chip generic" href="${attr(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.title || '参考链接')} ↗</a>`).join('')}
+            ${links.map(link => {
+              const platform = referencePlatformMeta(link.platform);
+              const label = `${platform.icon} ${link.title || platform.label}`;
+              if (link.kind === 'copy') {
+                return `<button class="link-chip generic platform-${attr(link.platform || 'web')}" type="button" data-copy-reference="${attr(link.value || '')}">${escapeHtml(label)} · 复制</button>`;
+              }
+              const href = link.url || link.value || '';
+              return `<a class="link-chip generic platform-${attr(link.platform || 'web')}" href="${attr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)} ↗</a>`;
+            }).join('')}
           </div>
         ` : ''}
       </div>
@@ -209,6 +208,7 @@ function renderTodos() {
     </div>
   `;
   bindHero();
+  bindReferenceActions();
   el.main.querySelector('#add-todo').addEventListener('click', () => openTodoForm());
   el.main.querySelectorAll('[data-todo-check]').forEach(input => {
     input.addEventListener('change', async () => {
@@ -257,3 +257,16 @@ function bindHero() {
   el.main.querySelector('#edit-trip')?.addEventListener('click', () => openTripForm(state.current.trip));
 }
 
+
+function bindReferenceActions() {
+  el.main.querySelectorAll('[data-copy-reference]').forEach(button => {
+    button.addEventListener('click', async () => {
+      try {
+        await copyText(button.dataset.copyReference || '');
+        showToast('微信小程序口令已复制');
+      } catch {
+        showToast('复制失败，请手动复制', 'error');
+      }
+    });
+  });
+}

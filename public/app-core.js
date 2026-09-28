@@ -26,7 +26,6 @@ const el = {
   main: document.querySelector('#main'),
   topbarTitle: document.querySelector('#topbar-title'),
   backHome: document.querySelector('#back-home'),
-  logout: document.querySelector('#logout-button'),
   bottomNav: document.querySelector('#bottom-nav'),
   sheet: document.querySelector('#sheet'),
   sheetBackdrop: document.querySelector('#sheet-backdrop'),
@@ -145,10 +144,62 @@ function formatItemTime(item) {
   return start || '待定';
 }
 
-function itemLinkUrls(item) {
-  const links = Array.isArray(item?.links) ? item.links.map(link => link?.url).filter(Boolean) : [];
-  if (links.length) return links;
+const REFERENCE_PLATFORM_META = {
+  wechat: { icon: '🟢', label: '微信小程序' },
+  douyin: { icon: '🎵', label: '抖音' },
+  meituan: { icon: '🟡', label: '美团' },
+  dianping: { icon: '🟠', label: '大众点评' },
+  xhs: { icon: '🔴', label: '小红书' },
+  xianyu: { icon: '🐟', label: '闲鱼' },
+  web: { icon: '🔗', label: '网页' }
+};
+
+function referencePlatformMeta(platform) {
+  return REFERENCE_PLATFORM_META[platform] || REFERENCE_PLATFORM_META.web;
+}
+
+function itemReferenceValues(item) {
+  const refs = Array.isArray(item?.links)
+    ? item.links.map(ref => ref?.value || ref?.url).filter(Boolean)
+    : [];
+  if (refs.length) return refs;
   return [item?.xhs_url, item?.dianping_url].filter(Boolean);
+}
+
+function extractReferenceInputs(value, maxItems = 12) {
+  const text = String(value || '').trim();
+  if (!text) return [];
+  const refs = [];
+  for (const line of text.split(/\r?\n/)) {
+    const raw = line.trim();
+    if (!raw) continue;
+    const urls = raw.match(/https?:\/\/[^\s]+/ig) || [];
+    if (urls.length) {
+      for (const url of urls) {
+        const cleaned = url.replace(/[),，。；;]+$/g, '');
+        if (!refs.includes(cleaned)) refs.push(cleaned);
+      }
+    } else if (/^weixin:\/\//i.test(raw) || /(?:#)?小程序:\/\//i.test(raw)) {
+      if (!refs.includes(raw)) refs.push(raw);
+    }
+    if (refs.length >= maxItems) break;
+  }
+  return refs.slice(0, maxItems);
+}
+
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const input = document.createElement('textarea');
+  input.value = value;
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.appendChild(input);
+  input.select();
+  document.execCommand('copy');
+  input.remove();
 }
 
 function baiduPointUrl(item) {
@@ -226,3 +277,69 @@ async function loadTrips() {
   renderHome();
 }
 
+
+function parseRoute(pathname = window.location.pathname) {
+  if (pathname === '/' || pathname === '') return { name: 'home' };
+  let match = pathname.match(/^\/trips\/(\d+)\/day\/(\d+)\/?$/);
+  if (match) return { name: 'day', tripId: match[1], dayId: match[2] };
+  match = pathname.match(/^\/trips\/(\d+)\/todos\/?$/);
+  if (match) return { name: 'todos', tripId: match[1] };
+  match = pathname.match(/^\/trips\/(\d+)\/?$/);
+  if (match) return { name: 'trip', tripId: match[1] };
+  return { name: 'not-found' };
+}
+
+async function navigate(path, { replace = false } = {}) {
+  if (window.location.pathname !== path) {
+    history[replace ? 'replaceState' : 'pushState']({}, '', path);
+  } else if (replace) {
+    history.replaceState({}, '', path);
+  }
+  await loadRoute();
+}
+
+async function loadRoute() {
+  const route = parseRoute();
+  if (route.name === 'not-found') {
+    history.replaceState({}, '', '/');
+    return loadRoute();
+  }
+  if (route.name === 'home') {
+    state.trips = await api('/api/trips');
+    renderHome();
+    return;
+  }
+
+  state.current = await api(`/api/trips/${route.tripId}`);
+  el.backHome.classList.remove('hidden');
+  el.bottomNav.classList.remove('hidden');
+
+  if (route.name === 'todos') {
+    state.tab = 'todos';
+    state.currentDayId = state.current.days[0]?.id || null;
+    renderCurrent();
+    return;
+  }
+
+  const day = route.name === 'day'
+    ? state.current.days.find(item => String(item.id) === String(route.dayId))
+    : state.current.days[0];
+  state.currentDayId = day?.id || null;
+  state.tab = 'itinerary';
+
+  if (day && route.name !== 'day') {
+    history.replaceState({}, '', `/trips/${route.tripId}/day/${day.id}`);
+  } else if (!day && route.name !== 'todos') {
+    history.replaceState({}, '', `/trips/${route.tripId}/todos`);
+    state.tab = 'todos';
+  }
+  renderCurrent();
+}
+
+function syncCurrentUrl({ replace = true } = {}) {
+  if (!state.current?.trip?.id) return;
+  const path = state.tab === 'todos'
+    ? `/trips/${state.current.trip.id}/todos`
+    : `/trips/${state.current.trip.id}/day/${state.currentDayId}`;
+  history[replace ? 'replaceState' : 'pushState']({}, '', path);
+}

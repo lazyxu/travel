@@ -68,6 +68,7 @@ TRAVEL_BIND=${TRAVEL_BIND:-0.0.0.0}
 TRAVEL_PORT=${TRAVEL_PORT:-3080}
 TRAVEL_COOKIE_SECURE=${TRAVEL_COOKIE_SECURE:-0}
 TRAVEL_AUTH_DISABLED=1
+TRAVEL_BAIDU_MAP_AK=${TRAVEL_BAIDU_MAP_AK:-}
 TRAVEL_IMAGE=${TRAVEL_IMAGE:-ghcr.io/lazyxu/travel:master}
 TRAVEL_POSTGRES_IMAGE=${TRAVEL_POSTGRES_IMAGE:-postgres:17-alpine}
 TRAVEL_VERSION=$SOURCE_REF
@@ -84,6 +85,24 @@ TRAVEL_LOG_MAX_FILES=5
 TRAVEL_BACKUP_RETENTION_DAYS=7
 ENV
   chmod 600 "$ENV_PATH"
+}
+
+ensure_optional_env_defaults() {
+  [[ -f "$ENV_PATH" ]] || return 0
+  grep -q '^TRAVEL_BAIDU_MAP_AK=' "$ENV_PATH" || printf '\nTRAVEL_BAIDU_MAP_AK=\n' >> "$ENV_PATH"
+}
+
+set_env_value() {
+  local key="$1" value="$2" tmp
+  tmp="$(mktemp "$CONFIG_DIR/.env.XXXXXX")"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { found = 0 }
+    index($0, key "=") == 1 { print key "=" value; found = 1; next }
+    { print }
+    END { if (!found) print key "=" value }
+  ' "$ENV_PATH" > "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" "$ENV_PATH"
 }
 
 build_app_from_source() {
@@ -155,6 +174,13 @@ show_access() {
     say '访问认证：已开启'
   fi
   say "管理命令：$MANAGER_PATH status | update | logs | doctor | backup"
+  local baidu_ak_value
+  baidu_ak_value="$(grep -E '^TRAVEL_BAIDU_MAP_AK=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
+  if [[ -n "$baidu_ak_value" ]]; then
+    say '百度 POI：已配置'
+  else
+    say '百度 POI：未配置（可运行 travel-server baidu-ak set）'
+  fi
   if [[ -w /usr/local/bin || "$(id -u)" -eq 0 ]]; then
     ln -sf "$MANAGER_PATH" /usr/local/bin/travel-server 2>/dev/null || true
     [[ -x /usr/local/bin/travel-server ]] && say '已安装命令：travel-server'
@@ -182,6 +208,7 @@ install() {
   check_host
   prepare_layout
   write_env_if_missing
+  ensure_optional_env_defaults
   refresh_deploy_files
   pull_images
   say '启动 travel...'
@@ -193,6 +220,7 @@ install() {
 update() {
   check_host
   [[ -f "$ENV_PATH" && -f "$COMPOSE_PATH" ]] || die 'travel 尚未安装，请先执行安装命令'
+  ensure_optional_env_defaults
   say '更新前备份数据库...'
   backup
   say '刷新部署文件...'
@@ -260,6 +288,38 @@ password() {
   grep -E '^TRAVEL_ADMIN_PASSWORD=' "$ENV_PATH" | tail -1 | cut -d= -f2-
 }
 
+baidu_ak() {
+  [[ -f "$ENV_PATH" ]] || die 'travel 尚未安装'
+  ensure_optional_env_defaults
+  case "${2:-status}" in
+    status)
+      local current
+      current="$(grep -E '^TRAVEL_BAIDU_MAP_AK=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
+      if [[ -n "$current" ]]; then say '百度地图 AK：已配置'; else say '百度地图 AK：未配置'; fi
+      ;;
+    set)
+      local ak
+      read -r -s -p 'Baidu Map AK: ' ak
+      printf '\n'
+      [[ -n "$ak" ]] || die 'AK 不能为空'
+      [[ "${#ak}" -le 128 ]] || die 'AK 长度异常'
+      set_env_value TRAVEL_BAIDU_MAP_AK "$ak"
+      say '百度地图 AK 已保存到 ~/.travel/config/.env'
+      compose up -d app
+      wait_healthy
+      ;;
+    clear)
+      set_env_value TRAVEL_BAIDU_MAP_AK ""
+      say '百度地图 AK 已清除'
+      compose up -d app
+      wait_healthy
+      ;;
+    *)
+      die '用法：travel-server baidu-ak [status|set|clear]'
+      ;;
+  esac
+}
+
 case "${1:-install}" in
   install) install ;;
   update) update ;;
@@ -270,6 +330,7 @@ case "${1:-install}" in
   restart) restart ;;
   stop) stop ;;
   password) password ;;
+  baidu-ak) baidu_ak "$@" ;;
   *)
     cat <<USAGE
 Usage: travel-server <command>
@@ -284,6 +345,7 @@ Commands:
   restart   Restart services
   stop      Stop services
   password  Print the local admin password when authentication is enabled
+  baidu-ak  Configure Baidu Map AK securely (status|set|clear)
 USAGE
     exit 2
     ;;

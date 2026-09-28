@@ -9,7 +9,7 @@ import {
   httpError,
   normalizeCoordType,
   normalizeCoordinate,
-  normalizeLinkUrls,
+  normalizeReferences,
   normalizeTimeRange,
   normalizeUrlList,
   optionalUrl,
@@ -17,7 +17,8 @@ import {
   toBoolean,
   validDate
 } from './lib.js';
-import { resolveLinkMetadata } from './link-preview.js';
+import { resolveReferenceMetadata } from './link-preview.js';
+import { searchBaiduPoi } from './baidu.js';
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
@@ -25,6 +26,7 @@ const authDisabled = process.env.TRAVEL_AUTH_DISABLED === '1';
 const adminPassword = process.env.TRAVEL_ADMIN_PASSWORD || '';
 const sessionSecret = process.env.TRAVEL_SESSION_SECRET || '';
 const cookieSecure = process.env.TRAVEL_COOKIE_SECURE === '1';
+const baiduMapAk = process.env.TRAVEL_BAIDU_MAP_AK || '';
 const categories = new Set(['交通', '景点', '餐饮', '住宿', '购物', '其他']);
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -170,6 +172,21 @@ app.use('/api', (req, _res, next) => {
   next();
 });
 
+app.get('/api/baidu/poi/search', async (req, res) => {
+  if (!baiduMapAk) throw httpError(503, '未配置百度地图 AK，请在服务器上运行 travel-server baidu-ak set');
+  const query = requiredText(req.query?.query, '搜索关键词', 45);
+  const region = requiredText(req.query?.region, '搜索城市', 50);
+  try {
+    const results = await searchBaiduPoi({ ak: baiduMapAk, query, region });
+    res.json({ results });
+  } catch (error) {
+    if (error.code === 'BAIDU_AK_MISSING') throw httpError(503, error.message);
+    throw httpError(502, `百度地图搜索失败：${error.message}`, {
+      baiduStatus: error.baiduStatus ?? null
+    });
+  }
+});
+
 app.get('/api/trips', async (_req, res) => {
   const result = await pool.query(`
     SELECT t.id, t.title, t.destination, t.start_date, t.end_date, t.notes,
@@ -284,8 +301,8 @@ app.post('/api/days/:dayId/items', async (req, res) => {
   const coordType = normalizeCoordType(req.body?.coordType);
   const notes = cleanText(req.body?.notes, 5000);
   const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
-  const linkUrls = normalizeLinkUrls(req.body?.links || [], '参考链接', 12);
-  const links = await resolveLinkMetadata(linkUrls);
+  const referenceInputs = normalizeReferences(req.body?.references ?? req.body?.links ?? [], 12);
+  const links = await resolveReferenceMetadata(referenceInputs);
 
   const result = await pool.query(
     `INSERT INTO itinerary_items (
@@ -314,8 +331,8 @@ app.put('/api/items/:id', async (req, res) => {
   const coordType = normalizeCoordType(req.body?.coordType);
   const notes = cleanText(req.body?.notes, 5000);
   const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
-  const linkUrls = normalizeLinkUrls(req.body?.links || [], '参考链接', 12);
-  const links = await resolveLinkMetadata(linkUrls);
+  const referenceInputs = normalizeReferences(req.body?.references ?? req.body?.links ?? [], 12);
+  const links = await resolveReferenceMetadata(referenceInputs);
 
   const result = await pool.query(
     `UPDATE itinerary_items
