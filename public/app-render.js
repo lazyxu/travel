@@ -90,16 +90,16 @@ function renderItinerary() {
   el.main.innerHTML = `
     ${heroHtml()}
     ${tripExpenseSummaryHtml()}
-    <div class="day-tabs">
+    <div class="day-tabs" role="tablist" aria-label="旅行日期">
       ${days.map(item => `
-        <button class="day-tab ${String(item.id) === String(state.currentDayId) ? 'active' : ''}" data-day-id="${attr(item.id)}" type="button">
+        <button class="day-tab ${String(item.id) === String(state.currentDayId) ? 'active' : ''}" data-day-id="${attr(item.id)}" type="button" role="tab" aria-selected="${String(item.id) === String(state.currentDayId) ? 'true' : 'false'}">
           <strong>D${dayNumber(item.day_date, trip.start_date)} · ${escapeHtml(formatDate(item.day_date))}</strong>
           <span>${escapeHtml(item.title || weekday(item.day_date))}</span>
         </button>
       `).join('')}
     </div>
     ${day ? `
-      <div class="section-head">
+      <div class="section-head itinerary-section-head">
         <div>
           <h2>${escapeHtml(day.title || `${formatDate(day.day_date)} ${weekday(day.day_date)}`)}</h2>
           ${day.notes ? `<div class="section-subtitle">${escapeHtml(day.notes)}</div>` : ''}
@@ -121,6 +121,22 @@ function renderItinerary() {
       <button id="add-item" class="fab" type="button" aria-label="添加行程">＋</button>
     ` : '<div class="empty-state"><strong>暂无日期</strong></div>'}
   `;
+
+  const dayTabs = el.main.querySelector('.day-tabs');
+  const activeDayTab = dayTabs?.querySelector('.day-tab.active');
+  if (dayTabs && activeDayTab) {
+    requestAnimationFrame(() => {
+      const left = activeDayTab.offsetLeft;
+      const right = left + activeDayTab.offsetWidth;
+      const visibleLeft = dayTabs.scrollLeft + 8;
+      const visibleRight = dayTabs.scrollLeft + dayTabs.clientWidth - 8;
+      if (left < visibleLeft || right > visibleRight) {
+        const maxScroll = Math.max(0, dayTabs.scrollWidth - dayTabs.clientWidth);
+        const centered = left - (dayTabs.clientWidth - activeDayTab.offsetWidth) / 2;
+        dayTabs.scrollTo({ left: Math.max(0, Math.min(maxScroll, centered)), behavior: 'smooth' });
+      }
+    });
+  }
 
   bindHero();
   bindReferenceActions();

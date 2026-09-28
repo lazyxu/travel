@@ -30,7 +30,7 @@ function inlineExpenseHtml(item, { readonly = false } = {}) {
   const paidCount = expenses.filter(expense => expense.paid).length;
   return `
     <div class="inline-expense-summary">
-      <span>¥ ${escapeHtml(formatMoney(total, currency))}</span>
+      <span>${escapeHtml(formatMoney(total, currency))}</span>
       <em>${expenses.length} 笔${paidCount ? ` · 已付 ${paidCount}` : ''}</em>
     </div>
   `;
@@ -42,13 +42,24 @@ function tripExpenseSummaryHtml() {
   const currency = trip.currency || 'CNY';
   const total = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const budget = Number(trip.budget_total || 0);
+  const remaining = budget - total;
+  const overBudget = budget > 0 && remaining < 0;
+  const usedPercent = budget > 0 ? Math.max(0, Math.round((total / budget) * 100)) : 0;
+  const progressPercent = Math.min(100, usedPercent);
   const unlinked = expenses.filter(expense => !expense.item_id);
   if (!budget && !expenses.length) return '';
 
   return `
-    <section class="trip-expense-summary">
-      <div><span>预算</span><strong>${budget ? escapeHtml(formatMoney(budget, currency)) : '未设置'}</strong></div>
-      <div><span>已记录</span><strong>${escapeHtml(formatMoney(total, currency))}</strong></div>
+    <section class="trip-expense-summary ${overBudget ? 'over-budget' : ''}">
+      <div class="expense-summary-stat"><span>预算</span><strong>${budget ? escapeHtml(formatMoney(budget, currency)) : '未设置'}</strong></div>
+      <div class="expense-summary-stat"><span>已记录</span><strong>${escapeHtml(formatMoney(total, currency))}</strong></div>
+      ${budget ? `<div class="expense-summary-stat"><span>${overBudget ? '超出' : '剩余'}</span><strong>${escapeHtml(formatMoney(Math.abs(remaining), currency))}</strong></div>` : ''}
+      ${budget ? `
+        <div class="expense-summary-progress" aria-label="预算使用 ${usedPercent}%">
+          <div class="expense-summary-progress-copy"><span>预算使用</span><strong>${usedPercent}%</strong></div>
+          <div class="expense-summary-track"><i style="width: ${progressPercent}%"></i></div>
+        </div>
+      ` : ''}
       ${unlinked.length ? `
         <div class="unlinked-expenses">
           <span>未关联费用</span>
