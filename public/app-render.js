@@ -15,7 +15,7 @@ function renderHome() {
       <button id="create-trip" class="button primary small" type="button">＋ 新旅行</button>
     </div>
     <div class="trip-grid">
-      ${state.trips.map(trip => {
+      ${[...state.trips].sort((a, b) => tripSortValue(a).localeCompare(tripSortValue(b))).map(trip => {
         const status = tripStatusMeta(trip);
         return `
           <article class="trip-card trip-card-${status.kind}" data-trip-id="${attr(trip.id)}" role="button" tabindex="0" aria-label="打开旅行：${attr(trip.title)}">
@@ -353,33 +353,71 @@ function itemCardHtml(item, { readonly = false } = {}) {
 
 function renderTodos() {
   const { todos } = state.current;
-  const remaining = todos.filter(todo => !todo.done).length;
+  const pending = todos
+    .filter(todo => !todo.done)
+    .sort((a, b) => {
+      const aDue = String(a.due_date || '9999-12-31').slice(0, 10);
+      const bDue = String(b.due_date || '9999-12-31').slice(0, 10);
+      return aDue.localeCompare(bDue) || Number(a.id || 0) - Number(b.id || 0);
+    });
+  const completed = todos.filter(todo => todo.done);
+  const total = todos.length;
+  const doneCount = completed.length;
+  const progress = total ? Math.round((doneCount / total) * 100) : 0;
+  const overdueCount = pending.filter(todo => todoDueMeta(todo).kind === 'overdue').length;
+
   el.main.innerHTML = `
     ${heroHtml()}
-    <div class="section-head">
+    <section class="todo-overview">
+      <div class="todo-overview-copy">
+        <span>准备进度</span>
+        <strong>${total ? `${doneCount} / ${total}` : '还没有待办'}</strong>
+        <small>${overdueCount ? `${overdueCount} 项已逾期` : pending.length ? `还有 ${pending.length} 项待完成` : total ? '准备工作已完成' : '先记录需要提前准备的事项'}</small>
+      </div>
+      <div class="todo-progress-value">${progress}%</div>
+      <div class="todo-progress-track"><i style="width: ${progress}%"></i></div>
+    </section>
+
+    <div class="section-head todo-section-head">
       <div>
-        <h2>旅行待办</h2>
-        <div class="section-subtitle">${remaining ? `还有 ${remaining} 项未完成` : '准备工作已完成'}</div>
+        <h2>待完成</h2>
+        <div class="section-subtitle">${pending.length ? `${pending.length} 项` : '没有未完成事项'}</div>
       </div>
       <button id="add-todo" class="button primary small" type="button">＋ 添加</button>
     </div>
-    <div class="todo-list">
-      ${todos.length ? todos.map(todo => todoHtml(todo)).join('') : `
-        <div class="empty-state">
-          <div class="empty-icon">✓</div>
-          <strong>还没有待办</strong>
-          <div>可以记录订票、订酒店、签证、行李和预约事项。</div>
+
+    <div class="todo-list todo-pending-list">
+      ${pending.length ? pending.map(todo => todoHtml(todo)).join('') : `
+        <div class="todo-all-done">
+          <span>✓</span>
+          <div><strong>${total ? '准备工作已完成' : '还没有待办'}</strong><small>${total ? '可以安心出发了' : '可以记录订票、订酒店、签证、行李和预约事项'}</small></div>
         </div>
       `}
     </div>
+
+    ${completed.length ? `
+      <details class="todo-completed-group" ${pending.length ? '' : 'open'}>
+        <summary>
+          <span>已完成</span>
+          <strong>${completed.length}</strong>
+          <em>⌄</em>
+        </summary>
+        <div class="todo-list todo-completed-list">
+          ${completed.map(todo => todoHtml(todo)).join('')}
+        </div>
+      </details>
+    ` : ''}
   `;
+
   bindHero();
   bindReferenceActions();
+  bindDisclosureMenus();
   el.main.querySelector('#add-todo').addEventListener('click', () => openTodoForm());
   el.main.querySelectorAll('[data-todo-check]').forEach(input => {
     input.addEventListener('change', async () => {
       const todo = state.current.todos.find(x => String(x.id) === input.dataset.todoCheck);
       if (!todo) return;
+      input.disabled = true;
       try {
         await api(`/api/todos/${todo.id}`, {
           method: 'PUT',
@@ -393,6 +431,7 @@ function renderTodos() {
         await refreshCurrent();
       } catch (error) {
         input.checked = !input.checked;
+        input.disabled = false;
         showToast(error.message, 'error');
       }
     });
@@ -406,15 +445,23 @@ function renderTodos() {
 }
 
 function todoHtml(todo) {
+  const due = todoDueMeta(todo);
   return `
-    <article class="todo-card ${todo.done ? 'done' : ''}">
-      <input class="todo-check" type="checkbox" ${todo.done ? 'checked' : ''} data-todo-check="${attr(todo.id)}" aria-label="完成待办" />
-      <div>
+    <article class="todo-card ${todo.done ? 'done' : ''} ${due.kind !== 'none' && due.kind !== 'done' ? `due-${due.kind}` : ''}">
+      <input class="todo-check" type="checkbox" ${todo.done ? 'checked' : ''} data-todo-check="${attr(todo.id)}" aria-label="${todo.done ? '标记为未完成' : '标记为已完成'}" />
+      <div class="todo-copy">
         <div class="todo-title">${escapeHtml(todo.title)}</div>
-        ${todo.due_date ? `<div class="todo-meta">截止 ${escapeHtml(formatDate(todo.due_date))}</div>` : ''}
+        ${due.label && !todo.done ? `<div class="todo-due todo-due-${due.kind}">${escapeHtml(due.label)}</div>` : ''}
         ${todo.notes ? `<div class="todo-notes">${escapeHtml(todo.notes)}</div>` : ''}
       </div>
-      <button class="card-action" type="button" data-edit-todo="${attr(todo.id)}">编辑</button>
+      <div class="todo-actions">
+        <details class="item-action-menu">
+          <summary class="card-more" aria-label="更多操作">•••</summary>
+          <div class="item-action-popover">
+            <button type="button" data-edit-todo="${attr(todo.id)}">编辑待办</button>
+          </div>
+        </details>
+      </div>
     </article>
   `;
 }

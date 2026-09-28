@@ -166,6 +166,29 @@ function defaultTripDay(days = [], today = localDateKey()) {
   return next || sorted[sorted.length - 1];
 }
 
+function tripSortValue(trip, today = localDateKey()) {
+  const status = tripStatusMeta(trip, today);
+  const start = String(trip?.start_date || '9999-12-31').slice(0, 10);
+  const end = String(trip?.end_date || '0000-01-01').slice(0, 10);
+  if (status.kind === 'active') return `0:${start}`;
+  if (status.kind === 'upcoming') return `1:${start}`;
+  if (status.kind === 'undated') return '2:9999-12-31';
+  const invertedPast = String(99999999 - Number(end.replaceAll('-', '') || 0)).padStart(8, '0');
+  return `3:${invertedPast}`;
+}
+
+function todoDueMeta(todo, today = localDateKey()) {
+  if (todo?.done) return { kind: 'done', label: '已完成' };
+  const due = String(todo?.due_date || '').slice(0, 10);
+  if (!due) return { kind: 'none', label: '' };
+  if (due < today) return { kind: 'overdue', label: `已逾期 · ${formatDate(due)}` };
+  if (due === today) return { kind: 'today', label: '今天截止' };
+  const days = Math.max(0, daysBetween(today, due));
+  if (days === 1) return { kind: 'soon', label: '明天截止' };
+  if (days <= 7) return { kind: 'soon', label: `${days} 天后截止` };
+  return { kind: 'future', label: `截止 ${formatDate(due)}` };
+}
+
 function tripStatusMeta(trip, today = localDateKey()) {
   const start = String(trip?.start_date || '').slice(0, 10);
   const end = String(trip?.end_date || '').slice(0, 10);
