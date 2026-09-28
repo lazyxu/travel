@@ -2522,3 +2522,65 @@ body.dialog-open {
     padding: 22px;
   }
 }
+
+
+/* 2026-09-28 UI polish: mobile touch targets */
+.reference-remove,
+.image-editor-drag,
+.image-editor-remove,
+.dining-drag-handle,
+.drag-handle,
+.card-more {
+  min-width: var(--control-height-sm);
+  min-height: var(--control-height-sm);
+}
+
+.reference-remove {
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border-radius: var(--radius-xs);
+}
+.image-editor-drag,
+.image-editor-remove {
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border-radius: var(--radius-xs);
+}
+.dining-drag-handle {
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border-radius: var(--radius-xs);
+}
+.card-more {
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+}
+.drag-handle {
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  padding: 0;
+}
+
+.reference-remove:active,
+.image-editor-drag:active,
+.image-editor-remove:active,
+.dining-drag-handle:active,
+.card-more:active {
+  transform: scale(.96);
+}
+
+@media (max-width: 520px) {
+  .reference-analysis-card {
+    padding-right: 44px;
+  }
+  .reference-analysis-card .reference-remove {
+    right: 4px;
+    top: 4px;
+  }
+  .dining-candidate-card {
+    grid-template-columns: 36px 28px minmax(0,1fr);
+  }
+  .dining-candidate-actions {
+    gap: 6px;
+  }
+}
