@@ -567,3 +567,16 @@ button { color: inherit; }
   background: var(--accent);
   box-shadow: 0 0 0 3px rgba(31,111,95,.12);
 }
+
+.share-settings { display: grid; gap: 7px; }
+.share-setting-row { display: grid; grid-template-columns: 22px 1fr; gap: 9px; align-items: start; padding: 9px 10px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfa; }
+.share-setting-row input { width: 18px; height: 18px; margin-top: 1px; }
+.share-setting-row span { display: grid; gap: 2px; }
+.share-setting-row strong { font-size: 12px; }
+.share-setting-row small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.active-share-status { display: grid; gap: 4px; padding: 11px; border-radius: 13px; background: #edf5f1; }
+.active-share-status strong { font-size: 13px; color: var(--accent); }
+.active-share-status span, .active-share-status small { color: #627069; font-size: 10px; line-height: 1.45; }
+.share-created-help { margin-top: 5px; color: var(--muted); font-size: 10px; }
+.leg-control[data-leg-drop] { border-radius: 12px; }
+.leg-control[data-leg-drop].drag-leg-hover { background: rgba(31,111,95,.08); box-shadow: inset 0 0 0 1px rgba(31,111,95,.2); }

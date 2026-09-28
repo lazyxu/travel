@@ -76,34 +76,78 @@ function shareTokenParam(value) {
   return token;
 }
 
-async function shareTripId(token) {
+const SHARE_DEFAULTS = Object.freeze({
+  notes: false,
+  images: true,
+  links: true,
+  hotelPhone: false,
+  expenses: false
+});
+
+function normalizeShareSettings(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return Object.fromEntries(
+    Object.entries(SHARE_DEFAULTS).map(([key, fallback]) => [
+      key,
+      source[key] === undefined ? fallback : toBoolean(source[key])
+    ])
+  );
+}
+
+async function shareAccess(token) {
   const result = await pool.query(
-    `SELECT trip_id
+    `SELECT id, trip_id, settings, created_at
        FROM trip_shares
       WHERE token_hash = $1 AND revoked_at IS NULL`,
     [hashShareToken(token)]
   );
   if (!result.rowCount) throw httpError(404, '分享链接不存在或已失效');
-  return String(result.rows[0].trip_id);
+  return {
+    ...result.rows[0],
+    settings: normalizeShareSettings(result.rows[0].settings)
+  };
 }
 
 async function publicTripAggregate(token) {
-  const tripId = await shareTripId(token);
-  const aggregate = await getTripAggregate(tripId);
+  const access = await shareAccess(token);
+  const settings = access.settings;
+  const aggregate = await getTripAggregate(access.trip_id);
   aggregate.todos = [];
-  aggregate.expenses = [];
+  aggregate.share = { settings };
+
+  if (!settings.notes) aggregate.trip.notes = '';
+
+  aggregate.expenses = settings.expenses
+    ? aggregate.expenses.map(expense => ({
+        id: expense.id,
+        item_id: expense.item_id,
+        expense_date: expense.expense_date,
+        category: expense.category,
+        title: expense.title,
+        amount: expense.amount,
+        paid: expense.paid,
+        notes: settings.notes ? expense.notes : ''
+      }))
+    : [];
+
   aggregate.days = aggregate.days.map(day => ({
     ...day,
+    notes: settings.notes ? day.notes : '',
     items: day.items.map(item => {
       const details = { ...(item.details || {}) };
       delete details.confirmationNo;
+      if (!settings.hotelPhone) delete details.phone;
       return {
         ...item,
+        notes: settings.notes ? item.notes : '',
         details,
-        image_urls: (item.image_urls || []).map(value => {
-          const match = String(value).match(/^\/uploads\/([a-zA-Z0-9._-]+)$/);
-          return match ? `/api/public/share/${token}/uploads/${match[1]}` : value;
-        })
+        links: settings.links ? item.links : [],
+        image_urls: settings.images
+          ? (item.image_urls || []).map(value => {
+              const match = String(value).match(/^\/uploads\/([a-zA-Z0-9._-]+)$/);
+              return match ? `/api/public/share/${token}/uploads/${match[1]}` : value;
+            })
+          : []
       };
     })
   }));
@@ -257,7 +301,9 @@ app.get('/api/public/share/:token', async (req, res) => {
 app.get('/api/public/share/:token/uploads/:name', async (req, res, next) => {
   try {
     const token = shareTokenParam(req.params.token);
-    const tripId = await shareTripId(token);
+    const access = await shareAccess(token);
+    if (!access.settings.images) throw httpError(404, '图片未在该分享中公开');
+    const tripId = String(access.trip_id);
     const name = String(req.params.name || '');
     if (!/^[a-zA-Z0-9._-]+$/.test(name)) throw httpError(404, '图片不存在');
     const ref = `/uploads/${name}`;
@@ -426,32 +472,56 @@ app.put('/api/trips/:id', async (req, res) => {
 app.get('/api/trips/:id/shares', async (req, res) => {
   const tripId = idParam(req.params.id, '旅行 ID');
   const result = await pool.query(
-    `SELECT id, created_at
+    `SELECT id, created_at, settings
        FROM trip_shares
       WHERE trip_id = $1 AND revoked_at IS NULL
-      ORDER BY created_at DESC`,
+      ORDER BY created_at DESC
+      LIMIT 1`,
     [tripId]
   );
-  res.json(result.rows);
+  res.json(result.rows.map(row => ({ ...row, settings: normalizeShareSettings(row.settings) })));
 });
 
 app.post('/api/trips/:id/shares', async (req, res) => {
   const tripId = idParam(req.params.id, '旅行 ID');
-  const exists = await pool.query('SELECT 1 FROM trips WHERE id = $1', [tripId]);
-  if (!exists.rowCount) throw httpError(404, '旅行不存在');
-
+  const settings = normalizeShareSettings(req.body?.settings);
   const token = crypto.randomBytes(24).toString('base64url');
-  const result = await pool.query(
-    `INSERT INTO trip_shares (trip_id, token_hash)
-     VALUES ($1, $2)
-     RETURNING id, created_at`,
-    [tripId, hashShareToken(token)]
-  );
+
+  const created = await withTx(async client => {
+    const exists = await client.query('SELECT 1 FROM trips WHERE id = $1 FOR UPDATE', [tripId]);
+    if (!exists.rowCount) throw httpError(404, '旅行不存在');
+    await client.query(
+      'UPDATE trip_shares SET revoked_at = now() WHERE trip_id = $1 AND revoked_at IS NULL',
+      [tripId]
+    );
+    const result = await client.query(
+      `INSERT INTO trip_shares (trip_id, token_hash, settings)
+       VALUES ($1, $2, $3::jsonb)
+       RETURNING id, created_at, settings`,
+      [tripId, hashShareToken(token), JSON.stringify(settings)]
+    );
+    return result.rows[0];
+  });
+
   res.status(201).json({
-    id: result.rows[0].id,
-    created_at: result.rows[0].created_at,
+    ...created,
+    settings: normalizeShareSettings(created.settings),
     path: `/share/${token}`
   });
+});
+
+app.put('/api/shares/:id/settings', async (req, res) => {
+  const id = idParam(req.params.id, '分享 ID');
+  const settings = normalizeShareSettings(req.body?.settings);
+  const result = await pool.query(
+    `UPDATE trip_shares
+        SET settings = $2::jsonb
+      WHERE id = $1 AND revoked_at IS NULL
+      RETURNING id, created_at, settings`,
+    [id, JSON.stringify(settings)]
+  );
+  if (!result.rowCount) throw httpError(404, '分享链接不存在');
+  res.json({ ...result.rows[0], settings: normalizeShareSettings(result.rows[0].settings) });
 });
 
 app.delete('/api/shares/:id', async (req, res) => {
@@ -475,10 +545,9 @@ app.put('/api/days/:id', async (req, res) => {
   const id = idParam(req.params.id, '日期 ID');
   const title = cleanText(req.body?.title, 120);
   const notes = cleanText(req.body?.notes, 3000);
-  const routeMode = normalizeRouteMode(req.body?.routeMode);
   const result = await pool.query(
-    `UPDATE trip_days SET title = $2, notes = $3, route_mode = $4 WHERE id = $1 RETURNING *`,
-    [id, title, notes, routeMode]
+    `UPDATE trip_days SET title = $2, notes = $3 WHERE id = $1 RETURNING *`,
+    [id, title, notes]
   );
   if (!result.rowCount) throw httpError(404, '日期不存在');
   res.json(result.rows[0]);

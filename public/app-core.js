@@ -434,7 +434,21 @@ function baiduViaPoint(point) {
   return result;
 }
 
+function dayUniformRouteMode(day) {
+  const items = dayDisplayItems(day);
+  if (items.length < 2 || items.some(item => !hasItemCoordinates(item))) return '';
+  const modes = [];
+  for (let index = 0; index < items.length - 1; index += 1) {
+    modes.push(legMode(day, items[index], items[index + 1]));
+  }
+  const unique = [...new Set(modes)];
+  return unique.length === 1 ? unique[0] : '';
+}
+
 function baiduDayRouteUrl(day) {
+  const mode = dayUniformRouteMode(day);
+  if (!mode) return '';
+
   const points = dayDisplayItems(day).filter(hasItemCoordinates).slice(0, 17);
   if (points.length < 2) return '';
 
@@ -448,7 +462,7 @@ function baiduDayRouteUrl(day) {
     ['origin', baiduDirectionPoint(origin)],
     ['destination', baiduDirectionPoint(destination)],
     ['coord_type', coordType],
-    ['mode', day?.route_mode || 'driving']
+    ['mode', mode]
   ];
 
   if (origin.location_uid) pairs.push(['origin_uid', origin.location_uid]);
@@ -458,13 +472,21 @@ function baiduDayRouteUrl(day) {
   if (region) pairs.push(['region', region]);
 
   const viaPoints = points.slice(1, -1).map(baiduViaPoint);
-  if (viaPoints.length) {
-    // 百度官方要求 viaPoints 的整个 JSON 先 encodeURIComponent，再拼到 URI。
-    pairs.push(['viaPoints', JSON.stringify({ viaPoints })]);
-  }
+  if (viaPoints.length) pairs.push(['viaPoints', JSON.stringify({ viaPoints })]);
 
   pairs.push(['src', baiduAppSrc()]);
   return `${scheme}://map/direction?${pairs.map(([key, value]) => `${key}=${enc(value)}`).join('&')}`;
+}
+
+function dayRouteLabel(day) {
+  const mode = dayUniformRouteMode(day);
+  if (!mode) return '';
+  const meta = {
+    driving: { icon: '🚕', label: '驾车' },
+    walking: { icon: '🚶', label: '步行' },
+    transit: { icon: '🚇', label: '公交' }
+  }[mode];
+  return meta ? `${meta.icon} 全天${meta.label}路线` : '';
 }
 
 async function compressImageFile(file, maxDimension = 1600, quality = 0.82) {

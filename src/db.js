@@ -142,6 +142,31 @@ const MIGRATIONS = [
         ON trip_shares(trip_id, created_at DESC)
         WHERE revoked_at IS NULL;
     `
+  },
+  {
+    version: 3,
+    name: 'share_privacy_and_single_active_link',
+    sql: `
+      ALTER TABLE trip_shares
+        ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL
+        DEFAULT '{"notes":false,"images":true,"links":true,"hotelPhone":false,"expenses":false}'::jsonb;
+
+      WITH ranked AS (
+        SELECT id,
+               row_number() OVER (PARTITION BY trip_id ORDER BY created_at DESC, id DESC) AS rn
+          FROM trip_shares
+         WHERE revoked_at IS NULL
+      )
+      UPDATE trip_shares s
+         SET revoked_at = now()
+        FROM ranked r
+       WHERE s.id = r.id AND r.rn > 1;
+
+      DROP INDEX IF EXISTS idx_trip_shares_one_active;
+      CREATE UNIQUE INDEX idx_trip_shares_one_active
+        ON trip_shares(trip_id)
+        WHERE revoked_at IS NULL;
+    `
   }
 ];
 

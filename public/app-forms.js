@@ -69,17 +69,13 @@ function openDayForm(day) {
     <div class="stack">
       <label class="field"><span>当天标题</span><input name="title" maxlength="120" value="${attr(day.title || '')}" placeholder="例如：岚山与嵯峨野" /></label>
       <label class="field"><span>当天备注</span><textarea name="notes" maxlength="3000" placeholder="路线提示、天气、集合点等">${escapeHtml(day.notes || '')}</textarea></label>
-      <label class="field"><span>百度地图路线模式</span>
-        <select name="routeMode">
-          ${Object.entries(ROUTE_MODE_META).map(([value, meta]) => `<option value="${value}" ${(day.route_mode || 'driving') === value ? 'selected' : ''}>${meta.icon} ${meta.label}</option>`).join('')}
-        </select>
-      </label>
+      <p class="form-help">路线交通方式请直接在当天时间线的两站之间设置。只有全部分段交通方式一致时，才显示全天路线。</p>
       <button class="button primary full" type="submit">保存</button>
     </div>
   `, async form => {
     await api(`/api/days/${day.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title: form.get('title'), notes: form.get('notes'), routeMode: form.get('routeMode') })
+      body: JSON.stringify({ title: form.get('title'), notes: form.get('notes') })
     });
     closeSheet();
     await refreshCurrent();

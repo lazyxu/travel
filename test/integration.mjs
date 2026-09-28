@@ -198,18 +198,32 @@ try {
 
   const version = await json('/api/version');
   assert.equal(version.schemaVersion, version.latestSchemaVersion);
-  assert.ok(version.schemaVersion >= 2);
+  assert.ok(version.schemaVersion >= 3);
 
   const share = await json(`/api/trips/${created.trip.id}/shares`, {
     method: 'POST',
-    body: JSON.stringify({})
+    body: JSON.stringify({
+      settings: { notes: false, images: true, links: true, hotelPhone: false, expenses: true }
+    })
   });
   assert.match(share.path, /^\/share\/[A-Za-z0-9_-]+$/);
   const shareToken = share.path.split('/').pop();
   const publicTrip = await json(`/api/public/share/${shareToken}`);
   assert.equal(publicTrip.trip.title, 'Integration Trip');
-  assert.deepEqual(publicTrip.expenses, []);
+  assert.equal(publicTrip.expenses.length, 2);
+  assert.equal(publicTrip.trip.notes, '');
   assert.deepEqual(publicTrip.todos, []);
+  const activeShares = await json(`/api/trips/${created.trip.id}/shares`);
+  assert.equal(activeShares.length, 1);
+  assert.equal(activeShares[0].settings.expenses, true);
+  const updatedShare = await json(`/api/shares/${share.id}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify({ settings: { images: false, links: false, notes: false, hotelPhone: false, expenses: false } })
+  });
+  assert.equal(updatedShare.settings.images, false);
+  const publicAfterPrivacy = await json(`/api/public/share/${shareToken}`);
+  assert.deepEqual(publicAfterPrivacy.expenses, []);
+  assert.deepEqual(publicAfterPrivacy.days[0].items.flatMap(item => item.links || []), []);
 
   const revokeResponse = await fetch(`${base}/api/shares/${share.id}`, { method: 'DELETE' });
   assert.equal(revokeResponse.status, 204);

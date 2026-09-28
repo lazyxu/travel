@@ -105,12 +105,7 @@ function renderItinerary() {
           ${day.notes ? `<div class="section-subtitle">${escapeHtml(day.notes)}</div>` : ''}
         </div>
         <div class="section-actions">
-          <label class="route-mode-control" title="百度地图路线模式">
-            <select id="route-mode-select" aria-label="路线模式">
-              ${Object.entries(ROUTE_MODE_META).map(([value, meta]) => `<option value="${value}" ${(day.route_mode || 'driving') === value ? 'selected' : ''}>${meta.icon} ${meta.label}</option>`).join('')}
-            </select>
-          </label>
-          ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}" >🗺 百度地图 App 路线</a>` : ''}
+          ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}">${escapeHtml(dayRouteLabel(day))}</a>` : ''}
           <button id="edit-day" class="button ghost small" type="button">编辑当天</button>
         </div>
       </div>
@@ -137,25 +132,6 @@ function renderItinerary() {
   if (day) {
     el.main.querySelector('#edit-day').addEventListener('click', () => openDayForm(day));
     el.main.querySelector('#add-item').addEventListener('click', () => openItemForm(day));
-    const routeModeSelect = el.main.querySelector('#route-mode-select');
-    routeModeSelect?.addEventListener('change', async () => {
-      routeModeSelect.disabled = true;
-      try {
-        await api(`/api/days/${day.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            title: day.title || '',
-            notes: day.notes || '',
-            routeMode: routeModeSelect.value
-          })
-        });
-        day.route_mode = routeModeSelect.value;
-        renderItinerary();
-      } catch (error) {
-        showToast(error.message, 'error');
-        routeModeSelect.disabled = false;
-      }
-    });
     bindItinerarySorting(day);
     bindItineraryActions(day);
     el.main.querySelectorAll('[data-edit-item]').forEach(button => {

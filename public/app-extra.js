@@ -11,7 +11,7 @@ function legControlHtml(day, fromItem, toItem, { readonly = false } = {}) {
     return `<div class="leg-control readonly"><span class="leg-line"></span><span class="leg-mode-label">${meta.icon} ${escapeHtml(meta.label)}</span>${mapUrl ? `<a class="leg-map-link" href="${attr(mapUrl)}">百度地图 App ↗</a>` : ''}</div>`;
   }
 
-  return `<div class="leg-control"><span class="leg-line"></span><select data-leg-mode data-from-key="${attr(itemRouteKey(fromItem))}" data-to-key="${attr(itemRouteKey(toItem))}" aria-label="两站之间交通方式"><option value="driving" ${mode === 'driving' ? 'selected' : ''}>🚕 驾车</option><option value="walking" ${mode === 'walking' ? 'selected' : ''}>🚶 步行</option><option value="transit" ${mode === 'transit' ? 'selected' : ''}>🚇 公交</option></select>${mapUrl ? `<a class="leg-map-link" href="${attr(mapUrl)}">百度地图 App ↗</a>` : ''}</div>`;
+  return `<div class="leg-control" data-leg-drop data-from-key="${attr(itemRouteKey(fromItem))}" data-to-key="${attr(itemRouteKey(toItem))}"><span class="leg-line"></span><select data-leg-mode data-from-key="${attr(itemRouteKey(fromItem))}" data-to-key="${attr(itemRouteKey(toItem))}" aria-label="两站之间交通方式"><option value="driving" ${mode === 'driving' ? 'selected' : ''}>🚕 驾车</option><option value="walking" ${mode === 'walking' ? 'selected' : ''}>🚶 步行</option><option value="transit" ${mode === 'transit' ? 'selected' : ''}>🚇 公交</option></select>${mapUrl ? `<a class="leg-map-link" href="${attr(mapUrl)}">百度地图 App ↗</a>` : ''}</div>`;
 }
 
 function dayTimelineHtml(day, { readonly = false } = {}) {
@@ -135,7 +135,7 @@ function renderSharedTrip() {
               <h2>D${dayNumber(day.day_date, trip.start_date)} · ${escapeHtml(formatDate(day.day_date))}</h2>
               <div class="section-subtitle">${escapeHtml(day.title || weekday(day.day_date))}</div>
             </div>
-            ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}">🗺 全日路线</a>` : ''}
+            ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}">${escapeHtml(dayRouteLabel(day))}</a>` : ''}
           </div>
           <div class="timeline">
             ${dayDisplayItems(day).length ? dayTimelineHtml(day, { readonly: true }) : '<div class="empty-state"><strong>这一天暂无安排</strong></div>'}
@@ -147,20 +147,60 @@ function renderSharedTrip() {
   bindReferenceActions();
 }
 
+function shareSettingsFieldsHtml(settings = {}) {
+  const merged = {
+    notes: false,
+    images: true,
+    links: true,
+    hotelPhone: false,
+    expenses: false,
+    ...settings
+  };
+  const option = (name, label, help) => `
+    <label class="share-setting-row">
+      <input type="checkbox" name="${name}" ${merged[name] ? 'checked' : ''} />
+      <span><strong>${label}</strong><small>${help}</small></span>
+    </label>
+  `;
+  return `
+    <div class="share-settings">
+      ${option('images', '图片', '共享行程图片')}
+      ${option('links', '参考链接', '共享小红书、点评、微信等链接')}
+      ${option('notes', '备注', '共享旅行、当天、行程及费用备注')}
+      ${option('hotelPhone', '酒店电话', '共享住宿记录里的联系电话')}
+      ${option('expenses', '费用', '共享金额、分类及是否已支付')}
+    </div>
+  `;
+}
+
+function collectShareSettings() {
+  return Object.fromEntries(
+    ['notes', 'images', 'links', 'hotelPhone', 'expenses'].map(name => [
+      name,
+      Boolean(el.sheetForm.querySelector(`[name="${name}"]`)?.checked)
+    ])
+  );
+}
+
 function shareManagerHtml(shares = []) {
+  const current = shares[0] || null;
   return `
     <div class="stack">
-      <div class="share-help">生成的链接无需登录，只能查看行程。参考链接、图片和地图仍可点击；费用、待办和确认号不会公开。</div>
-      <button id="create-share-link" class="button primary full" type="button">生成只读分享链接</button>
+      <div class="share-help">分享页无需登录，只能查看。确认号始终不公开；下面可进一步控制哪些信息对外显示。</div>
+      ${shareSettingsFieldsHtml(current?.settings)}
+      ${current ? `
+        <div class="active-share-status">
+          <strong>分享已开启</strong>
+          <span>创建于 ${escapeHtml(new Date(current.created_at).toLocaleString())}</span>
+          <small>出于安全考虑，服务器只保存 token 哈希，旧链接无法再次显示。若需要重新复制，请重新生成，旧链接会立即失效。</small>
+        </div>
+        <button id="save-share-settings" class="button ghost full" type="button">保存分享设置</button>
+        <button id="create-share-link" class="button primary full" type="button">重新生成并废止旧链接</button>
+        <button id="disable-share-link" class="button danger full" type="button" data-share-id="${attr(current.id)}">关闭分享</button>
+      ` : `
+        <button id="create-share-link" class="button primary full" type="button">生成只读分享链接</button>
+      `}
       <div id="new-share-result"></div>
-      <div class="share-list">
-        ${shares.length ? shares.map(share => `
-          <div class="share-row">
-            <div><strong>已启用分享</strong><span>${escapeHtml(new Date(share.created_at).toLocaleString())}</span></div>
-            <button class="button danger small" type="button" data-revoke-share="${attr(share.id)}">停用</button>
-          </div>
-        `).join('') : '<div class="image-preview-empty">当前没有有效分享链接</div>'}
-      </div>
     </div>
   `;
 }
@@ -168,34 +208,58 @@ function shareManagerHtml(shares = []) {
 async function openShareManager() {
   try {
     const tripId = state.current.trip.id;
-    const shares = await api(`/api/trips/${tripId}/shares`);
+    let shares = await api(`/api/trips/${tripId}/shares`);
+    let current = shares[0] || null;
     openSheet('只读分享', shareManagerHtml(shares), async () => {});
 
-    el.sheetForm.querySelectorAll('[data-revoke-share]').forEach(button => {
-      button.addEventListener('click', async () => {
-        try {
-          await api(`/api/shares/${button.dataset.revokeShare}`, { method: 'DELETE' });
-          button.closest('.share-row')?.remove();
-          showToast('分享链接已停用');
-        } catch (error) {
-          showToast(error.message, 'error');
-        }
+    const saveSettings = async () => {
+      if (!current) return;
+      current = await api(`/api/shares/${current.id}/settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ settings: collectShareSettings() })
       });
+      showToast('分享设置已保存');
+    };
+
+    el.sheetForm.querySelector('#save-share-settings')?.addEventListener('click', () => {
+      saveSettings().catch(error => showToast(error.message, 'error'));
+    });
+
+    el.sheetForm.querySelector('#disable-share-link')?.addEventListener('click', async event => {
+      try {
+        const id = event.currentTarget.dataset.shareId;
+        await api(`/api/shares/${id}`, { method: 'DELETE' });
+        closeSheet();
+        showToast('分享已关闭');
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
     });
 
     el.sheetForm.querySelector('#create-share-link')?.addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
       try {
-        const created = await api(`/api/trips/${tripId}/shares`, { method: 'POST', body: JSON.stringify({}) });
+        const created = await api(`/api/trips/${tripId}/shares`, {
+          method: 'POST',
+          body: JSON.stringify({ settings: collectShareSettings() })
+        });
+        current = created;
         const url = `${window.location.origin}${created.path}`;
         const result = el.sheetForm.querySelector('#new-share-result');
-        result.innerHTML = `<div class="share-created"><input readonly value="${attr(url)}" /><button id="copy-share-link" class="button ghost small" type="button">复制</button></div>`;
+        result.innerHTML = `
+          <div class="share-created">
+            <input readonly value="${attr(url)}" />
+            <button id="copy-share-link" class="button ghost small" type="button">复制</button>
+          </div>
+          <div class="share-created-help">请现在复制保存。再次打开分享设置时不会显示明文 token。</div>
+        `;
         result.querySelector('#copy-share-link')?.addEventListener('click', async () => {
           await copyText(url);
           showToast('分享链接已复制');
         });
-        showToast('只读分享链接已生成');
+        button.textContent = '重新生成并废止旧链接';
+        showToast('新的只读分享链接已生成');
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
