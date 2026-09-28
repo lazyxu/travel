@@ -83,6 +83,38 @@ function itemEditorImageSummary(urls = []) {
   return urls.length ? `${urls.length} 张图片` : '未添加图片';
 }
 
+function applyAnalyzedLocationToItemForm(mainForm, result) {
+  const location = result?.location || result?.lodging || {};
+  const set = (name, value) => {
+    const input = mainForm.querySelector(`[name="${name}"]`);
+    if (input) input.value = value ?? '';
+  };
+  set('locationName', location.name || location.locationName || location.hotelName || '');
+  set('location', location.address || '');
+  set('locationUid', location.uid || location.locationUid || '');
+  set('latitude', location.latitude ?? '');
+  set('longitude', location.longitude ?? '');
+  set('coordType', location.coordType || 'bd09ll');
+
+  const title = mainForm.querySelector('[name="title"]');
+  if (title && !title.value.trim() && (location.name || location.locationName || location.hotelName)) {
+    title.value = location.name || location.locationName || location.hotelName;
+  }
+
+  const hasLocation = Boolean(
+    mainForm.querySelector('[name="locationName"]')?.value ||
+    mainForm.querySelector('[name="location"]')?.value ||
+    mainForm.querySelector('[name="latitude"]')?.value
+  );
+  updateCompactItemAddon(
+    mainForm,
+    'location',
+    itemEditorLocationSummary(mainForm),
+    hasLocation,
+    hasLocation ? '编辑' : '添加'
+  );
+}
+
 function itemEditorNoteSummary(note = '') {
   const text = String(note || '').trim().replace(/\s+/g, ' ');
   return text ? (text.length > 46 ? `${text.slice(0, 46)}…` : text) : '未添加备注';
@@ -162,9 +194,22 @@ function closeItemSubsheet(force = false) {
 
 function itemEditorDetailsFormHtml(kind, details = {}) {
   if (kind === 'lodging') {
+    const bookingSummary = details.bookingUrl
+      ? [details.bookingPlatform, '已添加预订链接'].filter(Boolean).join(' · ')
+      : '可粘贴华住会、携程等预订链接自动分析';
     return `
       <div class="stack">
         <label class="field"><span>酒店名称</span><input name="hotelName" maxlength="160" value="${attr(details.hotelName || '')}" /></label>
+        <div class="booking-analysis-card ${details.bookingUrl ? 'active' : ''}">
+          <div class="item-addon-icon">🔗</div>
+          <div class="item-addon-copy">
+            <strong>预订链接</strong>
+            <span data-booking-summary>${escapeHtml(bookingSummary)}</span>
+          </div>
+          <button class="button ghost small" type="button" data-analyze-booking>${details.bookingUrl ? '编辑' : '添加'}</button>
+        </div>
+        <input name="bookingPlatform" type="hidden" value="${attr(details.bookingPlatform || '')}" />
+        <input name="bookingUrl" type="hidden" value="${attr(details.bookingUrl || '')}" />
         <div class="field-grid">
           <label class="field"><span>入住日期</span><input name="checkInDate" type="date" value="${attr(details.checkInDate || '')}" /></label>
           <label class="field"><span>入住时间</span><input name="checkInTime" type="time" value="${attr(details.checkInTime || '')}" /></label>
@@ -175,10 +220,9 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
         </div>
         <label class="field"><span>房型</span><input name="roomType" maxlength="160" value="${attr(details.roomType || '')}" /></label>
         <div class="field-grid">
-          <label class="field"><span>预订平台</span><input name="bookingPlatform" maxlength="160" value="${attr(details.bookingPlatform || '')}" /></label>
           <label class="field"><span>确认号</span><input name="confirmationNo" maxlength="160" value="${attr(details.confirmationNo || '')}" /></label>
+          <label class="field"><span>酒店电话</span><input name="phone" maxlength="160" value="${attr(details.phone || '')}" /></label>
         </div>
-        <label class="field"><span>酒店电话</span><input name="phone" maxlength="160" value="${attr(details.phone || '')}" /></label>
         <p class="form-help">跨天酒店会自动成为住宿期间每天早上的第一站和晚上的最后一站。</p>
         <button class="button primary full" type="submit">完成</button>
       </div>
@@ -253,6 +297,7 @@ function itemEditorCollectDetails(kind, formData) {
       roomType: value('roomType'),
       phone: value('phone'),
       bookingPlatform: value('bookingPlatform'),
+      bookingUrl: value('bookingUrl'),
       confirmationNo: value('confirmationNo')
     };
   }
@@ -288,209 +333,88 @@ function itemEditorCollectDetails(kind, formData) {
   };
 }
 
-function itemEditorLocationFormHtml(mainForm) {
-  const value = name => mainForm.querySelector(`[name="${name}"]`)?.value || '';
-  const temp = {
-    title: mainForm.querySelector('[name="title"]')?.value || '',
-    location_name: value('locationName'),
-    location: value('location'),
-    latitude: value('latitude'),
-    longitude: value('longitude'),
-    coord_type: value('coordType') || 'bd09ll'
-  };
-  const mapUrl = baiduPointUrl(temp);
-  return `
-    <div class="stack">
-      <div class="poi-search-box">
-        <div class="poi-search-head"><strong>搜索百度地点</strong><span>选择后自动定位</span></div>
-        <div class="poi-search-row">
-          <input name="poiQuery" maxlength="45" placeholder="景点、餐厅、酒店等" />
-          <input name="poiRegion" maxlength="50" value="${attr(state.current?.trip?.destination || '')}" placeholder="城市" />
-          <button class="button ghost small" type="button" data-location-search>搜索</button>
-        </div>
-        <div class="poi-results hidden" data-location-results></div>
-      </div>
-      <label class="field"><span>地点名称</span><input name="locationName" maxlength="160" value="${attr(value('locationName'))}" placeholder="例如：灵隐寺" /></label>
-      <label class="field"><span>地址</span><input name="location" maxlength="240" value="${attr(value('location'))}" placeholder="可读地址" /></label>
-      <div class="baidu-link-box">
-        <div class="baidu-link-head"><strong>百度地图链接</strong><span>可直接粘贴分享链接</span></div>
-        <div class="baidu-link-row">
-          <input name="baiduMapLink" inputmode="url" placeholder="百度地图分享链接" />
-          <button class="button ghost small" type="button" data-location-parse>解析</button>
-        </div>
-        <div class="location-map-action" data-location-map-action>
-          ${mapUrl ? `<a class="map-link" href="${attr(mapUrl)}">在百度地图打开 ↗</a>` : '<span>尚未定位</span>'}
-        </div>
-      </div>
-      <input name="locationUid" type="hidden" value="${attr(value('locationUid'))}" />
-      <input name="latitude" type="hidden" value="${attr(value('latitude'))}" />
-      <input name="longitude" type="hidden" value="${attr(value('longitude'))}" />
-      <input name="coordType" type="hidden" value="${attr(value('coordType') || 'bd09ll')}" />
-      <div class="form-actions">
-        <button class="button danger" type="button" data-clear-location>清除地点</button>
-        <button class="button primary" type="submit">完成</button>
-      </div>
-    </div>
-  `;
-}
-
-function bindItemLocationEditor(subForm, mainForm) {
-  const field = name => subForm.querySelector(`[name="${name}"]`);
-  const mapAction = subForm.querySelector('[data-location-map-action]');
-
-  const updateMapAction = () => {
-    const temp = {
-      title: mainForm.querySelector('[name="title"]')?.value || '',
-      location_name: field('locationName')?.value || '',
-      location: field('location')?.value || '',
-      latitude: field('latitude')?.value || '',
-      longitude: field('longitude')?.value || '',
-      coord_type: field('coordType')?.value || 'bd09ll'
-    };
-    const url = baiduPointUrl(temp);
-    mapAction.innerHTML = url ? `<a class="map-link" href="${attr(url)}">在百度地图打开 ↗</a>` : '<span>尚未定位</span>';
-  };
-
-  const parseLocationLink = async () => {
-    const button = subForm.querySelector('[data-location-parse]');
-    const value = field('baiduMapLink')?.value?.trim();
-    if (!value) return showToast('请先粘贴百度地图链接', 'error');
-    const region = field('poiRegion')?.value?.trim() || state.current?.trip?.destination || '';
-    button.disabled = true;
-    button.textContent = '解析中…';
-    try {
-      const parsed = await api('/api/baidu/parse-link', {
-        method: 'POST',
-        body: JSON.stringify({ value, region })
-      });
-      if (parsed.name) field('locationName').value = parsed.name;
-      if (parsed.address) field('location').value = parsed.address;
-      field('locationUid').value = parsed.uid || '';
-      if (parsed.location) {
-        field('latitude').value = parsed.location.lat;
-        field('longitude').value = parsed.location.lng;
-        field('coordType').value = parsed.coordType || 'bd09ll';
-      }
-      subForm.dataset.dirty = '1';
-      updateMapAction();
-      showToast(parsed.location ? '百度地图位置已解析' : '已识别地点，请搜索确认定位');
-    } finally {
-      button.disabled = false;
-      button.textContent = '解析';
-    }
-  };
-
-  subForm.querySelector('[data-location-parse]')?.addEventListener('click', parseLocationLink);
-  field('baiduMapLink')?.addEventListener('paste', () => {
-    setTimeout(() => {
-      if (field('baiduMapLink')?.value?.trim()) parseLocationLink().catch(error => showToast(error.message, 'error'));
-    }, 0);
-  });
-
-  const searchLocation = async () => {
-    const button = subForm.querySelector('[data-location-search]');
-    const query = field('poiQuery')?.value?.trim();
-    const region = field('poiRegion')?.value?.trim();
-    if (!query || !region) return showToast('请填写搜索关键词和城市', 'error');
-    button.disabled = true;
-    button.textContent = '搜索中…';
-    try {
-      const params = new URLSearchParams({ query, region });
-      const data = await api(`/api/baidu/poi/search?${params.toString()}`);
-      const results = data?.results || [];
-      const box = subForm.querySelector('[data-location-results]');
-      box.classList.remove('hidden');
-      box.innerHTML = results.length ? results.map((poi, index) => `
-        <button class="poi-result" type="button" data-poi-index="${index}">
-          <strong>${escapeHtml(poi.name)}</strong>
-          <span>${escapeHtml([poi.city, poi.district, poi.address].filter(Boolean).join(' · '))}</span>
-        </button>
-      `).join('') : '<div class="poi-empty">没有找到匹配地点</div>';
-
-      box.querySelectorAll('[data-poi-index]').forEach(resultButton => {
-        resultButton.addEventListener('click', () => {
-          const poi = results[Number(resultButton.dataset.poiIndex)];
-          if (!poi) return;
-          field('locationName').value = poi.name || '';
-          field('location').value = [poi.city, poi.district, poi.address || poi.name].filter(Boolean).join(' ');
-          field('locationUid').value = poi.uid || '';
-          field('latitude').value = poi.location?.lat ?? '';
-          field('longitude').value = poi.location?.lng ?? '';
-          field('coordType').value = 'bd09ll';
-          if (!mainForm.querySelector('[name="title"]').value.trim()) {
-            mainForm.querySelector('[name="title"]').value = poi.name || '';
-          }
-          subForm.dataset.dirty = '1';
-          box.classList.add('hidden');
-          updateMapAction();
-        });
-      });
-    } finally {
-      button.disabled = false;
-      button.textContent = '搜索';
-    }
-  };
-
-  subForm.querySelector('[data-location-search]')?.addEventListener('click', searchLocation);
-  for (const inputName of ['poiQuery', 'poiRegion']) {
-    field(inputName)?.addEventListener('keydown', event => {
-      if (event.key !== 'Enter') return;
-      event.preventDefault();
-      searchLocation().catch(error => showToast(error.message, 'error'));
-    });
-  }
-
-  subForm.querySelector('[data-clear-location]')?.addEventListener('click', () => {
-    ['locationName', 'location', 'locationUid', 'latitude', 'longitude'].forEach(name => { field(name).value = ''; });
-    field('coordType').value = 'bd09ll';
-    subForm.dataset.dirty = '1';
-    updateMapAction();
-  });
-}
-
-function bindReferenceEditorWithin(root) {
+function bindReferenceEditorWithin(root, mainForm) {
   const editor = root.querySelector('[data-reference-editor]');
   if (!editor) return;
   const list = editor.querySelector('[data-reference-list]');
 
-  const sync = () => {
-    const rows = editor.querySelectorAll('.reference-editor-row');
-    rows.forEach(row => {
-      const remove = row.querySelector('[data-remove-reference]');
-      if (remove) remove.disabled = rows.length <= 1;
-    });
+  const rows = () => [...editor.querySelectorAll('[data-reference-row]')];
+
+  const rowValue = row => ({
+    value: row.querySelector('[name="refValue"]')?.value || '',
+    customTitle: row.querySelector('[name="refTitle"]')?.value || '',
+    autoTitle: row.querySelector('[name="refAutoTitle"]')?.value || '',
+    platform: row.querySelector('[name="refPlatform"]')?.value || '',
+    appUrl: row.querySelector('[name="refAppUrl"]')?.value || ''
+  });
+
+  const syncEmpty = () => {
+    const empty = list.querySelector('[data-reference-empty]');
+    if (!rows().length && !empty) {
+      list.innerHTML = '<div class="reference-editor-empty" data-reference-empty>还没有参考链接</div>';
+    } else if (rows().length && empty) {
+      empty.remove();
+    }
   };
 
-  editor.addEventListener('input', event => {
-    const valueInput = event.target.closest('[name="refValue"]');
-    if (!valueInput) return;
-    const row = valueInput.closest('.reference-editor-row');
-    if (valueInput.value.trim() !== String(valueInput.dataset.initialValue || '').trim()) {
-      const auto = row?.querySelector('[name="refAutoTitle"]');
-      const label = row?.querySelector('[data-reference-auto-label]');
-      if (auto) auto.value = '';
-      if (label) label.textContent = '链接已修改，保存后重新提取';
+  const applyReference = (result, existingRow = null) => {
+    if (result.type === 'location') {
+      applyAnalyzedLocationToItemForm(mainForm, result);
+      if (existingRow) existingRow.remove();
+      root.dataset.dirty = '1';
+      syncEmpty();
+      showToast('已识别为百度地图位置，并添加到“地点”');
+      return;
     }
-  });
+
+    const ref = result.reference || {
+      value: result.value || '',
+      customTitle: '',
+      autoTitle: ''
+    };
+    const html = referenceEditorRowHtml(ref, rows().length);
+    if (existingRow) existingRow.outerHTML = html;
+    else {
+      list.querySelector('[data-reference-empty]')?.remove();
+      list.insertAdjacentHTML('beforeend', html);
+    }
+    root.dataset.dirty = '1';
+    syncEmpty();
+  };
 
   editor.addEventListener('click', event => {
     const remove = event.target.closest('[data-remove-reference]');
     if (remove) {
-      remove.closest('.reference-editor-row')?.remove();
+      remove.closest('[data-reference-row]')?.remove();
       root.dataset.dirty = '1';
-      sync();
+      syncEmpty();
       return;
     }
-    if (event.target.closest('#add-reference-row')) {
-      if (editor.querySelectorAll('.reference-editor-row').length >= 12) return showToast('最多 12 个参考入口', 'error');
-      list.insertAdjacentHTML('beforeend', referenceEditorRowHtml());
-      root.dataset.dirty = '1';
-      sync();
+
+    const edit = event.target.closest('[data-edit-reference]');
+    if (edit) {
+      const row = edit.closest('[data-reference-row]');
+      openLinkAnalyzer({
+        context: 'reference',
+        initial: rowValue(row),
+        title: '分析链接',
+        onApply: result => applyReference(result, row)
+      });
+      return;
+    }
+
+    if (event.target.closest('[data-add-reference]')) {
+      if (rows().length >= 12) return showToast('最多 12 个参考入口', 'error');
+      openLinkAnalyzer({
+        context: 'reference',
+        title: '添加链接',
+        onApply: result => applyReference(result)
+      });
     }
   });
-  sync();
-}
 
+  syncEmpty();
+}
 function bindImageEditorWithin(root) {
   const editor = root.querySelector('[data-image-editor]');
   if (!editor) return;
@@ -735,7 +659,7 @@ function bindCompactItemEditor(mainForm, item) {
         const meta = ITEM_EDITOR_TYPES[typeSelect.value] || ITEM_EDITOR_TYPES.other;
         if (!meta.kind) return;
         const current = safeJsonParse(detailsInput.value, { kind: meta.kind });
-        openItemSubsheet(`${meta.icon} ${meta.label}信息`, itemEditorDetailsFormHtml(meta.kind, current), async data => {
+        const detailSubForm = openItemSubsheet(`${meta.icon} ${meta.label}信息`, itemEditorDetailsFormHtml(meta.kind, current), async data => {
           const next = itemEditorCollectDetails(meta.kind, data);
           detailsInput.value = JSON.stringify(next);
 
@@ -760,21 +684,73 @@ function bindCompactItemEditor(mainForm, item) {
           updateCompactItemAddon(mainForm, 'details', itemEditorDetailsSummary(typeSelect.value, next), true, '编辑');
           closeItemSubsheet(true);
         });
+
+        if (meta.kind === 'lodging') {
+          detailSubForm.querySelector('[data-analyze-booking]')?.addEventListener('click', () => {
+            openLinkAnalyzer({
+              context: 'lodging',
+              title: detailSubForm.querySelector('[name="bookingUrl"]')?.value ? '编辑预订链接' : '添加预订链接',
+              initial: {
+                bookingUrl: detailSubForm.querySelector('[name="bookingUrl"]')?.value || '',
+                bookingPlatform: detailSubForm.querySelector('[name="bookingPlatform"]')?.value || '',
+                hotelName: detailSubForm.querySelector('[name="hotelName"]')?.value || ''
+              },
+              onApply: result => {
+                if (result.type === 'location') {
+                  applyAnalyzedLocationToItemForm(mainForm, result);
+                  const hotelName = result.location?.name || '';
+                  if (hotelName && !detailSubForm.querySelector('[name="hotelName"]').value.trim()) {
+                    detailSubForm.querySelector('[name="hotelName"]').value = hotelName;
+                  }
+                  detailSubForm.dataset.dirty = '1';
+                  return;
+                }
+                if (result.type !== 'booking') throw new Error('这个链接没有识别为酒店预订链接');
+                const lodging = result.lodging || {};
+                detailSubForm.querySelector('[name="bookingUrl"]').value = lodging.bookingUrl || result.value || '';
+                detailSubForm.querySelector('[name="bookingPlatform"]').value = lodging.bookingPlatform || '';
+                if (lodging.hotelName) detailSubForm.querySelector('[name="hotelName"]').value = lodging.hotelName;
+                const summary = detailSubForm.querySelector('[data-booking-summary]');
+                if (summary) summary.textContent = [lodging.bookingPlatform, lodging.hotelName].filter(Boolean).join(' · ') || '已添加预订链接';
+                if (lodging.locationName || lodging.address || lodging.latitude !== null) {
+                  applyAnalyzedLocationToItemForm(mainForm, { type: 'location', location: {
+                    name: lodging.locationName || lodging.hotelName || '',
+                    address: lodging.address || '',
+                    uid: lodging.locationUid || '',
+                    latitude: lodging.latitude ?? null,
+                    longitude: lodging.longitude ?? null,
+                    coordType: lodging.coordType || 'bd09ll'
+                  }});
+                }
+                detailSubForm.dataset.dirty = '1';
+              }
+            });
+          });
+        }
         return;
       }
 
       if (id === 'location') {
-        const subForm = openItemSubsheet('📍 地点', itemEditorLocationFormHtml(mainForm), async (_data, form) => {
-          ['locationName', 'locationUid', 'location', 'latitude', 'longitude', 'coordType'].forEach(name => {
-            const source = form.querySelector(`[name="${name}"]`);
-            const target = mainForm.querySelector(`[name="${name}"]`);
-            if (source && target) target.value = source.value;
-          });
-          const hasLocation = Boolean(mainForm.querySelector('[name="locationName"]').value || mainForm.querySelector('[name="location"]').value || mainForm.querySelector('[name="latitude"]').value);
-          updateCompactItemAddon(mainForm, 'location', itemEditorLocationSummary(mainForm), hasLocation, hasLocation ? '编辑' : '添加');
-          closeItemSubsheet(true);
+        const current = {
+          type: 'location',
+          location: {
+            name: mainForm.querySelector('[name="locationName"]')?.value || '',
+            address: mainForm.querySelector('[name="location"]')?.value || '',
+            uid: mainForm.querySelector('[name="locationUid"]')?.value || '',
+            latitude: mainForm.querySelector('[name="latitude"]')?.value || null,
+            longitude: mainForm.querySelector('[name="longitude"]')?.value || null,
+            coordType: mainForm.querySelector('[name="coordType"]')?.value || 'bd09ll'
+          }
+        };
+        openLinkAnalyzer({
+          context: 'location',
+          initial: current,
+          title: current.location.name || current.location.address ? '编辑地点' : '添加地点',
+          onApply: result => {
+            if (result.type !== 'location') throw new Error('这个链接没有识别为百度地图位置');
+            applyAnalyzedLocationToItemForm(mainForm, result);
+          }
         });
-        bindItemLocationEditor(subForm, mainForm);
         return;
       }
 
@@ -813,7 +789,7 @@ function bindCompactItemEditor(mainForm, item) {
           updateCompactItemAddon(mainForm, 'references', itemEditorReferenceSummary(refs), refs.length > 0, refs.length ? '管理' : '添加');
           closeItemSubsheet(true);
         });
-        bindReferenceEditorWithin(subForm);
+        bindReferenceEditorWithin(subForm, mainForm);
         return;
       }
 
