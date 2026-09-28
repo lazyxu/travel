@@ -263,40 +263,6 @@ function itemReferenceEntries(item) {
     .map(value => ({ customTitle: '', autoTitle: '', value, platform: 'web' }));
 }
 
-function itemReferenceValues(item) {
-  return itemReferenceEntries(item).map(ref => ref.customTitle ? `${ref.customTitle} | ${ref.value}` : ref.value);
-}
-
-function extractReferenceInputs(value, maxItems = 12) {
-  const text = String(value || '').trim();
-  if (!text) return [];
-  const refs = [];
-
-  for (const line of text.split(/\r?\n/)) {
-    const raw = line.trim();
-    if (!raw) continue;
-    let title = '';
-    let candidate = raw;
-    const separator = raw.match(/\s[|｜]\s/);
-    if (separator) {
-      title = raw.slice(0, separator.index).trim();
-      candidate = raw.slice(separator.index + separator[0].length).trim();
-    }
-
-    const urls = candidate.match(/https?:\/\/[^\s]+/ig) || [];
-    if (urls.length) {
-      for (const url of urls) {
-        const cleaned = url.replace(/[),，。；;]+$/g, '');
-        if (!refs.some(ref => ref.value === cleaned)) refs.push({ value: cleaned, title });
-      }
-    } else if (/^weixin:\/\//i.test(candidate) || /(?:#)?小程序:\/\//i.test(candidate)) {
-      if (!refs.some(ref => ref.value === candidate)) refs.push({ value: candidate, title });
-    }
-    if (refs.length >= maxItems) break;
-  }
-  return refs.slice(0, maxItems);
-}
-
 async function copyText(value) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
