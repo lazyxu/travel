@@ -2722,3 +2722,43 @@ body.dialog-open{
 .action-confirm-actions .button{
   width: 100%;
 }
+
+
+/* Offline status */
+.offline-status{
+  position: sticky;
+  z-index: 19;
+  top: calc(54px + env(safe-area-inset-top));
+  width: min(calc(100% - 24px), 736px);
+  margin: 6px auto 2px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border: 1px solid #ead8ba;
+  border-radius: var(--radius-control);
+  background: #fff8ea;
+  box-shadow: 0 5px 18px rgba(67,52,26,.06);
+}
+.offline-dot{
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b77822;
+  box-shadow: 0 0 0 4px rgba(183,120,34,.10);
+}
+.offline-status > span:last-child{
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.offline-status strong{
+  color: #7b541d;
+  font-size: var(--font-meta);
+}
+.offline-status small{
+  color: #8f7044;
+  font-size: var(--font-caption);
+  line-height: 1.35;
+}

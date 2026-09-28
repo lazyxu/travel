@@ -156,8 +156,22 @@ async function api(url, options = {}) {
   }
 }
 
+function syncOnlineStatus({ announce = false } = {}) {
+  const offline = navigator.onLine === false;
+  document.querySelector('#offline-status')?.classList.toggle('hidden', !offline);
+  document.body.classList.toggle('is-offline', offline);
+  if (announce && !offline) showToast('网络已恢复');
+}
+
+window.addEventListener('offline', () => {
+  syncOnlineStatus();
+});
+window.addEventListener('online', () => {
+  syncOnlineStatus({ announce: true });
+});
+
 function showLogin() {
-  closeSheet();
+  closeSheet(true);
   el.app.classList.add('hidden');
   el.loginView.classList.remove('hidden');
   setTimeout(() => el.loginPassword.focus(), 50);
@@ -166,6 +180,7 @@ function showLogin() {
 function showApp() {
   el.loginView.classList.add('hidden');
   el.app.classList.remove('hidden');
+  syncOnlineStatus();
 }
 
 function localDateKey(date = new Date()) {
