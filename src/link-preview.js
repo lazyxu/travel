@@ -30,7 +30,7 @@ function metadataCacheSet(url, value) {
   }
 }
 
-const PLATFORM_LABELS = {
+export const PLATFORM_LABELS = {
   wechat: '微信小程序',
   douyin: '抖音',
   meituan: '美团',
@@ -136,6 +136,40 @@ export function dianpingAppUrl(value, title = '', finalUrl = '') {
   const keyword = cleanTitle(title);
   if (keyword) return `dianping://searchshoplist?keyword=${encodeURIComponent(keyword)}`;
   return 'dianping://';
+}
+
+export function detectBookingPlatform(value) {
+  let host = '';
+  try { host = new URL(String(value || '')).hostname.toLowerCase(); } catch {}
+  if (!host) return '';
+  if (/hworld\.com$|hworld\.com\.cn$|huazhu\.com$/.test(host)) return '华住会';
+  if (/ctrip\.com$/.test(host)) return '携程';
+  if (/trip\.com$/.test(host)) return 'Trip.com';
+  if (/booking\.com$/.test(host)) return 'Booking.com';
+  if (/agoda\.com$/.test(host)) return 'Agoda';
+  if (/fliggy\.com$/.test(host)) return '飞猪';
+  if (/marriott\.com$/.test(host)) return 'Marriott';
+  if (/hilton\.com$/.test(host)) return 'Hilton';
+  if (/ihg\.com$/.test(host)) return 'IHG';
+  if (/hyatt\.com$/.test(host)) return 'Hyatt';
+  if (/accor\.com$/.test(host)) return 'Accor';
+  return '';
+}
+
+export function deriveHotelName(title, bookingPlatform = '') {
+  let value = cleanTitle(title);
+  if (!value) return '';
+  value = value
+    .replace(/\s*[-_｜|·—–:]\s*(?:华住会|H\s*World|携程|Trip\.com|Booking\.com|Agoda|飞猪|酒店预订|酒店预约|预订).*$/i, '')
+    .trim();
+  if (bookingPlatform && value.toLowerCase().endsWith(bookingPlatform.toLowerCase())) {
+    value = value.slice(0, -bookingPlatform.length).replace(/[\s\-_|｜·—–:]+$/g, '').trim();
+  }
+  return value.slice(0, 160);
+}
+
+export function platformLabel(platform) {
+  return PLATFORM_LABELS[platform] || PLATFORM_LABELS.web;
 }
 
 export function detectPlatform(value) {
