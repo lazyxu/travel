@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {
   enumerateDates,
   normalizeCoordinate,
+  normalizeCurrency,
+  normalizeItemDetails,
+  normalizeMoney,
   normalizeReferences,
   normalizeRouteMode,
   normalizeTime,
@@ -82,4 +85,35 @@ test('route mode validates supported Baidu modes', () => {
   assert.equal(normalizeRouteMode('walking'), 'walking');
   assert.equal(normalizeRouteMode(''), 'driving');
   assert.throws(() => normalizeRouteMode('flight'));
+});
+
+
+test('money and currency validation', () => {
+  assert.equal(normalizeMoney('123.456', '预算'), '123.46');
+  assert.equal(normalizeMoney('', '预算'), '0.00');
+  assert.throws(() => normalizeMoney('-1', '预算'));
+  assert.equal(normalizeCurrency('jpy'), 'JPY');
+  assert.throws(() => normalizeCurrency('BTC'));
+});
+
+test('structured itinerary details are sanitized', () => {
+  assert.deepEqual(
+    normalizeItemDetails({ kind: 'flight', flightNo: 'MU5123', seat: '21A', unexpected: 'drop' }),
+    {
+      kind: 'flight',
+      airline: '',
+      flightNo: 'MU5123',
+      departureDate: '',
+      departureTime: '',
+      departureAirport: '',
+      departureTerminal: '',
+      arrivalDate: '',
+      arrivalTime: '',
+      arrivalAirport: '',
+      arrivalTerminal: '',
+      seat: '21A',
+      confirmationNo: ''
+    }
+  );
+  assert.throws(() => normalizeItemDetails({ kind: 'spaceship' }));
 });

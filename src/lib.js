@@ -131,6 +131,45 @@ export function normalizeRouteMode(value) {
   return mode;
 }
 
+export function normalizeCurrency(value) {
+  const currency = cleanText(value, 3).toUpperCase() || 'CNY';
+  if (!new Set(['CNY', 'USD', 'JPY', 'HKD', 'EUR', 'GBP', 'KRW']).has(currency)) {
+    throw httpError(400, '货币仅支持 CNY、USD、JPY、HKD、EUR、GBP、KRW');
+  }
+  return currency;
+}
+
+export function normalizeMoney(value, field = '金额') {
+  if (value === null || value === undefined || String(value).trim() === '') return '0.00';
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0 || number > 9999999999.99) {
+    throw httpError(400, `${field}无效`);
+  }
+  return number.toFixed(2);
+}
+
+export function normalizeItemDetails(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const kind = cleanText(source.kind, 12).toLowerCase();
+  if (kind && !new Set(['lodging', 'flight', 'train']).has(kind)) {
+    throw httpError(400, '结构化行程类型无效');
+  }
+
+  const allowed = {
+    lodging: ['hotelName', 'checkInDate', 'checkInTime', 'checkOutDate', 'checkOutTime', 'roomType', 'phone', 'bookingPlatform', 'confirmationNo'],
+    flight: ['airline', 'flightNo', 'departureDate', 'departureTime', 'departureAirport', 'departureTerminal', 'arrivalDate', 'arrivalTime', 'arrivalAirport', 'arrivalTerminal', 'seat', 'confirmationNo'],
+    train: ['trainNo', 'departureDate', 'departureTime', 'departureStation', 'arrivalDate', 'arrivalTime', 'arrivalStation', 'carriage', 'seat', 'confirmationNo']
+  };
+  if (!kind) return {};
+
+  const result = { kind };
+  for (const key of allowed[kind]) {
+    const max = key.toLowerCase().includes('date') ? 10 : key.toLowerCase().includes('time') ? 5 : 160;
+    result[key] = cleanText(source[key], max);
+  }
+  return result;
+}
+
 export function toBoolean(value) {
   return value === true || value === 'true' || value === 1 || value === '1';
 }

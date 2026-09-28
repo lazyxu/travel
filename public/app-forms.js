@@ -9,6 +9,14 @@ function tripFormHtml(trip = {}) {
         <label class="field"><span>结束日期 *</span><input name="endDate" type="date" required value="${attr(String(trip.end_date || today).slice(0,10))}" /></label>
       </div>
       <label class="field"><span>备注</span><textarea name="notes" maxlength="5000" placeholder="旅行目标、同行人、酒店等总体信息">${escapeHtml(trip.notes || '')}</textarea></label>
+      <div class="field-grid">
+        <label class="field"><span>旅行总预算</span><input name="budgetTotal" type="number" min="0" step="0.01" value="${attr(trip.budget_total ?? '0')}" placeholder="0" /></label>
+        <label class="field"><span>币种</span>
+          <select name="currency">
+            ${['CNY','USD','JPY','HKD','EUR','GBP','KRW'].map(code => `<option value="${code}" ${(trip.currency || 'CNY') === code ? 'selected' : ''}>${code}</option>`).join('')}
+          </select>
+        </label>
+      </div>
       <div class="form-actions">
         ${trip.id ? '<button id="delete-trip" class="button danger" type="button">删除旅行</button>' : ''}
         <button class="button primary" type="submit">保存</button>
@@ -24,7 +32,9 @@ function openTripForm(trip = null) {
       destination: form.get('destination'),
       startDate: form.get('startDate'),
       endDate: form.get('endDate'),
-      notes: form.get('notes')
+      notes: form.get('notes'),
+      budgetTotal: form.get('budgetTotal'),
+      currency: form.get('currency')
     };
     if (trip) {
       await api(`/api/trips/${trip.id}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -94,6 +104,136 @@ function imagePreviewHtml(urls = []) {
   `;
 }
 
+function itemDetailsFieldsHtml(item = {}) {
+  const d = item.details || {};
+  return `
+    <label class="field"><span>结构化模板</span>
+      <select name="detailsKind">
+        <option value="" ${!d.kind ? 'selected' : ''}>普通行程</option>
+        <option value="lodging" ${d.kind === 'lodging' ? 'selected' : ''}>🏨 酒店 / 住宿</option>
+        <option value="flight" ${d.kind === 'flight' ? 'selected' : ''}>✈️ 飞机 / 航班</option>
+        <option value="train" ${d.kind === 'train' ? 'selected' : ''}>🚄 高铁 / 火车</option>
+      </select>
+    </label>
+
+    <div class="details-fields ${d.kind === 'lodging' ? '' : 'hidden'}" data-details-kind="lodging">
+      <div class="field-grid">
+        <label class="field"><span>酒店名称</span><input name="hotelName" maxlength="160" value="${attr(d.hotelName || '')}" /></label>
+        <label class="field"><span>房型</span><input name="roomType" maxlength="160" value="${attr(d.roomType || '')}" /></label>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span>入住日期</span><input name="checkInDate" type="date" value="${attr(d.checkInDate || '')}" /></label>
+        <label class="field"><span>入住时间</span><input name="checkInTime" type="time" value="${attr(d.checkInTime || '')}" /></label>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span>退房日期</span><input name="checkOutDate" type="date" value="${attr(d.checkOutDate || '')}" /></label>
+        <label class="field"><span>退房时间</span><input name="checkOutTime" type="time" value="${attr(d.checkOutTime || '')}" /></label>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span>预订平台</span><input name="bookingPlatform" maxlength="160" value="${attr(d.bookingPlatform || '')}" /></label>
+        <label class="field"><span>确认号</span><input name="lodgingConfirmationNo" maxlength="160" value="${attr(d.confirmationNo || '')}" /></label>
+      </div>
+      <label class="field"><span>酒店电话</span><input name="phone" maxlength="160" value="${attr(d.phone || '')}" /></label>
+    </div>
+
+    <div class="details-fields ${d.kind === 'flight' ? '' : 'hidden'}" data-details-kind="flight">
+      <div class="field-grid">
+        <label class="field"><span>航空公司</span><input name="airline" maxlength="160" value="${attr(d.airline || '')}" /></label>
+        <label class="field"><span>航班号</span><input name="flightNo" maxlength="40" value="${attr(d.flightNo || '')}" placeholder="MU5123" /></label>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span>出发日期</span><input name="flightDepartureDate" type="date" value="${attr(d.departureDate || '')}" /></label>
+        <label class="field"><span>出发时间</span><input name="flightDepartureTime" type="time" value="${attr(d.departureTime || '')}" /></label>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span>出发机场</span><input name="departureAirport" maxlength="160" value="${attr(d.departureAirport || '')}" /></label>
+        <label class="field"><span>航站楼</span><input name="departureTerminal" maxlength="80" value="${attr(d.departureTerminal || '')}" /></label>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span>到达日期</span><input name="flightArrivalDate" type="date" value="${attr(d.arrivalDate || '')}" /></label>
+        <label class="field"><span>到达时间</span><input name="flightArrivalTime" type="time" value="${attr(d.arrivalTime || '')}" /></label>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span>到达机场</span><input name="arrivalAirport" maxlength="160" value="${attr(d.arrivalAirport || '')}" /></label>
+        <label class="field"><span>航站楼</span><input name="arrivalTerminal" maxlength="80" value="${attr(d.arrivalTerminal || '')}" /></label>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span>座位</span><input name="flightSeat" maxlength="40" value="${attr(d.seat || '')}" /></label>
+        <label class="field"><span>确认号</span><input name="flightConfirmationNo" maxlength="160" value="${attr(d.confirmationNo || '')}" /></label>
+      </div>
+    </div>
+
+    <div class="details-fields ${d.kind === 'train' ? '' : 'hidden'}" data-details-kind="train">
+      <label class="field"><span>车次</span><input name="trainNo" maxlength="40" value="${attr(d.trainNo || '')}" placeholder="G1234" /></label>
+      <div class="field-grid">
+        <label class="field"><span>出发日期</span><input name="trainDepartureDate" type="date" value="${attr(d.departureDate || '')}" /></label>
+        <label class="field"><span>出发时间</span><input name="trainDepartureTime" type="time" value="${attr(d.departureTime || '')}" /></label>
+      </div>
+      <label class="field"><span>出发站</span><input name="departureStation" maxlength="160" value="${attr(d.departureStation || '')}" /></label>
+      <div class="field-grid">
+        <label class="field"><span>到达日期</span><input name="trainArrivalDate" type="date" value="${attr(d.arrivalDate || '')}" /></label>
+        <label class="field"><span>到达时间</span><input name="trainArrivalTime" type="time" value="${attr(d.arrivalTime || '')}" /></label>
+      </div>
+      <label class="field"><span>到达站</span><input name="arrivalStation" maxlength="160" value="${attr(d.arrivalStation || '')}" /></label>
+      <div class="field-grid">
+        <label class="field"><span>车厢</span><input name="carriage" maxlength="40" value="${attr(d.carriage || '')}" /></label>
+        <label class="field"><span>座位</span><input name="trainSeat" maxlength="40" value="${attr(d.seat || '')}" /></label>
+      </div>
+      <label class="field"><span>订单 / 确认号</span><input name="trainConfirmationNo" maxlength="160" value="${attr(d.confirmationNo || '')}" /></label>
+    </div>
+  `;
+}
+
+function collectItemDetails(form) {
+  const kind = String(form.get('detailsKind') || '');
+  if (!kind) return {};
+
+  if (kind === 'lodging') {
+    return {
+      kind,
+      hotelName: form.get('hotelName'),
+      checkInDate: form.get('checkInDate'),
+      checkInTime: form.get('checkInTime'),
+      checkOutDate: form.get('checkOutDate'),
+      checkOutTime: form.get('checkOutTime'),
+      roomType: form.get('roomType'),
+      phone: form.get('phone'),
+      bookingPlatform: form.get('bookingPlatform'),
+      confirmationNo: form.get('lodgingConfirmationNo')
+    };
+  }
+  if (kind === 'flight') {
+    return {
+      kind,
+      airline: form.get('airline'),
+      flightNo: form.get('flightNo'),
+      departureDate: form.get('flightDepartureDate'),
+      departureTime: form.get('flightDepartureTime'),
+      departureAirport: form.get('departureAirport'),
+      departureTerminal: form.get('departureTerminal'),
+      arrivalDate: form.get('flightArrivalDate'),
+      arrivalTime: form.get('flightArrivalTime'),
+      arrivalAirport: form.get('arrivalAirport'),
+      arrivalTerminal: form.get('arrivalTerminal'),
+      seat: form.get('flightSeat'),
+      confirmationNo: form.get('flightConfirmationNo')
+    };
+  }
+  return {
+    kind,
+    trainNo: form.get('trainNo'),
+    departureDate: form.get('trainDepartureDate'),
+    departureTime: form.get('trainDepartureTime'),
+    departureStation: form.get('departureStation'),
+    arrivalDate: form.get('trainArrivalDate'),
+    arrivalTime: form.get('trainArrivalTime'),
+    arrivalStation: form.get('arrivalStation'),
+    carriage: form.get('carriage'),
+    seat: form.get('trainSeat'),
+    confirmationNo: form.get('trainConfirmationNo')
+  };
+}
+
 function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
   const startTime = item.start_time || item.item_time || '';
   const links = itemReferenceValues(item);
@@ -117,6 +257,7 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
         </label>
       </div>
       <label class="field"><span>行程标题 *</span><input name="title" required maxlength="160" value="${attr(item.title || '')}" placeholder="例如：清水寺" /></label>
+      ${itemDetailsFieldsHtml(item)}
       <div class="poi-search-box">
         <div class="poi-search-head"><strong>搜索百度地点</strong><span>选择后自动填写地址和 BD-09 坐标</span></div>
         <div class="poi-search-row">
@@ -183,7 +324,8 @@ function openItemForm(day, item = null) {
       coordType: form.get('coordType'),
       notes: form.get('notes'),
       references: extractReferenceInputs(form.get('references'), 12),
-      imageUrls: extractImageRefs(form.get('imageUrls'), 12)
+      imageUrls: extractImageRefs(form.get('imageUrls'), 12),
+      details: collectItemDetails(form)
     };
     const targetDayId = String(form.get('targetDayId') || day.id);
     if (item) {
@@ -205,6 +347,18 @@ function openItemForm(day, item = null) {
     }
     showToast(item ? '行程已更新' : '行程已添加');
   });
+
+  const detailsKindSelect = el.sheetForm.querySelector('[name="detailsKind"]');
+  const categorySelect = el.sheetForm.querySelector('[name="category"]');
+  const updateDetailsKind = () => {
+    const kind = detailsKindSelect?.value || '';
+    el.sheetForm.querySelectorAll('[data-details-kind]').forEach(section => {
+      section.classList.toggle('hidden', section.dataset.detailsKind !== kind);
+    });
+    if (categorySelect && kind === 'lodging') categorySelect.value = '住宿';
+    if (categorySelect && (kind === 'flight' || kind === 'train')) categorySelect.value = '交通';
+  };
+  detailsKindSelect?.addEventListener('change', updateDetailsKind);
 
   const poiSearchButton = el.sheetForm.querySelector('#poi-search-button');
   const poiResults = el.sheetForm.querySelector('[data-poi-results]');
@@ -311,6 +465,79 @@ function openItemForm(day, item = null) {
   }
 }
 
+function expenseFormHtml(expense = {}) {
+  const trip = state.current.trip;
+  const allItems = state.current.days.flatMap(day => day.items.map(item => ({
+    ...item,
+    day_date: day.day_date
+  })));
+  return `
+    <div class="stack">
+      <label class="field"><span>费用名称 *</span><input name="title" required maxlength="160" value="${attr(expense.title || '')}" placeholder="例如：酒店预付款" /></label>
+      <div class="field-grid">
+        <label class="field"><span>金额 *</span><input name="amount" type="number" min="0" step="0.01" required value="${attr(expense.amount ?? '')}" placeholder="0.00" /></label>
+        <label class="field"><span>币种</span><input value="${attr(trip.currency || 'CNY')}" disabled /></label>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span>分类</span>
+          <select name="category">
+            ${['交通','住宿','餐饮','门票','购物','其他'].map(category => `<option value="${category}" ${expense.category === category ? 'selected' : ''}>${category}</option>`).join('')}
+          </select>
+        </label>
+        <label class="field"><span>日期</span><input name="expenseDate" type="date" value="${attr(String(expense.expense_date || '').slice(0, 10))}" /></label>
+      </div>
+      <label class="field"><span>关联行程（可选）</span>
+        <select name="itemId">
+          <option value="">不关联</option>
+          ${allItems.map(item => `<option value="${item.id}" ${String(expense.item_id || '') === String(item.id) ? 'selected' : ''}>${formatDate(item.day_date)} · ${escapeHtml(item.title)}</option>`).join('')}
+        </select>
+      </label>
+      <label class="check-field"><input name="paid" type="checkbox" ${expense.paid ? 'checked' : ''} /><span>已支付</span></label>
+      <label class="field"><span>备注</span><textarea name="notes" maxlength="2000" placeholder="订单号、付款方式等">${escapeHtml(expense.notes || '')}</textarea></label>
+      <div class="form-actions">
+        ${expense.id ? '<button id="delete-expense" class="button danger" type="button">删除</button>' : ''}
+        <button class="button primary" type="submit">保存</button>
+      </div>
+    </div>
+  `;
+}
+
+function openExpenseForm(expense = null) {
+  openSheet(expense ? '编辑费用' : '添加费用', expenseFormHtml(expense || {}), async form => {
+    const payload = {
+      title: form.get('title'),
+      amount: form.get('amount'),
+      category: form.get('category'),
+      expenseDate: form.get('expenseDate'),
+      itemId: form.get('itemId'),
+      paid: form.get('paid') === 'on',
+      notes: form.get('notes')
+    };
+    if (expense) {
+      await api(`/api/expenses/${expense.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      await api(`/api/trips/${state.current.trip.id}/expenses`, { method: 'POST', body: JSON.stringify(payload) });
+    }
+    closeSheet();
+    await refreshCurrent();
+    showToast(expense ? '费用已更新' : '费用已添加');
+  });
+
+  if (expense) {
+    el.sheetForm.querySelector('#delete-expense').addEventListener('click', async () => {
+      if (!confirm(`确定删除“${expense.title}”吗？`)) return;
+      try {
+        await api(`/api/expenses/${expense.id}`, { method: 'DELETE' });
+        closeSheet();
+        await refreshCurrent();
+        showToast('费用已删除');
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    });
+  }
+}
+
 function todoFormHtml(todo = {}) {
   return `
     <div class="stack">
@@ -369,8 +596,16 @@ el.backHome.addEventListener('click', () => navigate('/'));
 el.bottomNav.querySelectorAll('[data-tab]').forEach(button => {
   button.addEventListener('click', () => {
     if (!state.current?.trip?.id) return;
+    if (button.dataset.tab === 'today') {
+      navigate(`/trips/${state.current.trip.id}/today`);
+      return;
+    }
     if (button.dataset.tab === 'todos') {
       navigate(`/trips/${state.current.trip.id}/todos`);
+      return;
+    }
+    if (button.dataset.tab === 'expenses') {
+      navigate(`/trips/${state.current.trip.id}/expenses`);
       return;
     }
     const dayId = state.currentDayId || state.current.days[0]?.id;

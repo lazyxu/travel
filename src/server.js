@@ -11,6 +11,9 @@ import {
   httpError,
   normalizeCoordType,
   normalizeCoordinate,
+  normalizeCurrency,
+  normalizeItemDetails,
+  normalizeMoney,
   normalizeReferences,
   normalizeRouteMode,
   normalizeTimeRange,
@@ -106,13 +109,13 @@ function setSessionCookie(res) {
 
 async function getTripAggregate(id) {
   const tripResult = await pool.query(
-    `SELECT id, title, destination, start_date, end_date, notes, created_at, updated_at
+    `SELECT id, title, destination, start_date, end_date, notes, budget_total, currency, created_at, updated_at
        FROM trips WHERE id = $1`,
     [id]
   );
   if (!tripResult.rowCount) throw httpError(404, '旅行不存在');
 
-  const [daysResult, itemsResult, todosResult] = await Promise.all([
+  const [daysResult, itemsResult, todosResult, expensesResult] = await Promise.all([
     pool.query(
       `SELECT id, trip_id, day_date, title, notes, route_mode, position
          FROM trip_days WHERE trip_id = $1 ORDER BY day_date, position, id`,
@@ -122,7 +125,7 @@ async function getTripAggregate(id) {
       `SELECT i.id, i.day_id, i.item_time, i.category, i.title, i.location, i.notes,
               i.xhs_url, i.dianping_url, i.links, i.image_urls,
               i.start_time, i.end_time, i.latitude, i.longitude, i.coord_type,
-              i.position, i.created_at, i.updated_at
+              i.details, i.position, i.created_at, i.updated_at
          FROM itinerary_items i
          JOIN trip_days d ON d.id = i.day_id
         WHERE d.trip_id = $1
@@ -133,6 +136,12 @@ async function getTripAggregate(id) {
       `SELECT id, trip_id, title, notes, due_date, done, position, created_at, updated_at
          FROM todos WHERE trip_id = $1
         ORDER BY done, due_date NULLS LAST, position, id`,
+      [id]
+    ),
+    pool.query(
+      `SELECT id, trip_id, item_id, expense_date, category, title, amount, paid, notes, position, created_at, updated_at
+         FROM expenses WHERE trip_id = $1
+        ORDER BY expense_date NULLS LAST, position, id`,
       [id]
     )
   ]);
@@ -147,7 +156,8 @@ async function getTripAggregate(id) {
   return {
     trip: tripResult.rows[0],
     days: daysResult.rows.map(day => ({ ...day, items: itemsByDay.get(String(day.id)) || [] })),
-    todos: todosResult.rows
+    todos: todosResult.rows,
+    expenses: expensesResult.rows
   };
 }
 
@@ -207,7 +217,7 @@ app.get('/api/baidu/poi/search', async (req, res) => {
 
 app.get('/api/trips', async (_req, res) => {
   const result = await pool.query(`
-    SELECT t.id, t.title, t.destination, t.start_date, t.end_date, t.notes,
+    SELECT t.id, t.title, t.destination, t.start_date, t.end_date, t.notes, t.budget_total, t.currency,
            COUNT(DISTINCT i.id)::int AS item_count,
            COUNT(DISTINCT td.id) FILTER (WHERE td.done = false)::int AS todo_count
       FROM trips t
@@ -226,13 +236,15 @@ app.post('/api/trips', async (req, res) => {
   const startDate = validDate(req.body?.startDate, '开始');
   const endDate = validDate(req.body?.endDate, '结束');
   const notes = cleanText(req.body?.notes, 5000);
+  const budgetTotal = normalizeMoney(req.body?.budgetTotal, '旅行预算');
+  const currency = normalizeCurrency(req.body?.currency);
   enumerateDates(startDate, endDate);
 
   const id = await withTx(async client => {
     const result = await client.query(
-      `INSERT INTO trips (title, destination, start_date, end_date, notes)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [title, destination, startDate, endDate, notes]
+      `INSERT INTO trips (title, destination, start_date, end_date, notes, budget_total, currency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [title, destination, startDate, endDate, notes, budgetTotal, currency]
     );
     await createMissingDays(client, result.rows[0].id, startDate, endDate);
     return result.rows[0].id;
@@ -252,6 +264,8 @@ app.put('/api/trips/:id', async (req, res) => {
   const startDate = validDate(req.body?.startDate, '开始');
   const endDate = validDate(req.body?.endDate, '结束');
   const notes = cleanText(req.body?.notes, 5000);
+  const budgetTotal = req.body?.budgetTotal === undefined ? null : normalizeMoney(req.body.budgetTotal, '旅行预算');
+  const currency = req.body?.currency === undefined ? null : normalizeCurrency(req.body.currency);
   enumerateDates(startDate, endDate);
 
   await withTx(async client => {
@@ -275,9 +289,10 @@ app.put('/api/trips/:id', async (req, res) => {
 
     await client.query(
       `UPDATE trips
-          SET title = $2, destination = $3, start_date = $4, end_date = $5, notes = $6, updated_at = now()
+          SET title = $2, destination = $3, start_date = $4, end_date = $5, notes = $6,
+              budget_total = COALESCE($7, budget_total), currency = COALESCE($8, currency), updated_at = now()
         WHERE id = $1`,
-      [id, title, destination, startDate, endDate, notes]
+      [id, title, destination, startDate, endDate, notes, budgetTotal, currency]
     );
     await client.query(
       `DELETE FROM trip_days WHERE trip_id = $1 AND (day_date < $2 OR day_date > $3)`,
@@ -322,17 +337,18 @@ app.post('/api/days/:dayId/items', async (req, res) => {
   const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
   const referenceInputs = normalizeReferences(req.body?.references ?? req.body?.links ?? [], 12);
   const links = await resolveReferenceMetadata(referenceInputs);
+  const details = normalizeItemDetails(req.body?.details);
 
   const result = await pool.query(
     `INSERT INTO itinerary_items (
        day_id, item_time, start_time, end_time, category, title, location,
-       latitude, longitude, coord_type, notes, links, image_urls, position
+       latitude, longitude, coord_type, notes, links, image_urls, details, position
      )
-     SELECT $1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+     SELECT $1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
             COALESCE((SELECT MAX(position) + 1 FROM itinerary_items WHERE day_id = $1), 0)
      WHERE EXISTS (SELECT 1 FROM trip_days WHERE id = $1)
      RETURNING *`,
-    [dayId, startTime, endTime, category, title, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls]
+    [dayId, startTime, endTime, category, title, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
   );
   if (!result.rowCount) throw httpError(404, '日期不存在');
   res.status(201).json(result.rows[0]);
@@ -352,14 +368,15 @@ app.put('/api/items/:id', async (req, res) => {
   const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
   const referenceInputs = normalizeReferences(req.body?.references ?? req.body?.links ?? [], 12);
   const links = await resolveReferenceMetadata(referenceInputs);
+  const details = normalizeItemDetails(req.body?.details);
 
   const result = await pool.query(
     `UPDATE itinerary_items
         SET item_time = $2, start_time = $2, end_time = $3, category = $4, title = $5,
             location = $6, latitude = $7, longitude = $8, coord_type = $9, notes = $10,
-            links = $11, image_urls = $12, updated_at = now()
+            links = $11, image_urls = $12, details = $13, updated_at = now()
       WHERE id = $1 RETURNING *`,
-    [id, startTime, endTime, category, title, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls]
+    [id, startTime, endTime, category, title, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
   );
   if (!result.rowCount) throw httpError(404, '行程项不存在');
   res.json(result.rows[0]);
@@ -450,6 +467,73 @@ app.post('/api/uploads/images', express.raw({
 app.delete('/api/items/:id', async (req, res) => {
   const result = await pool.query('DELETE FROM itinerary_items WHERE id = $1', [idParam(req.params.id, '行程项 ID')]);
   if (!result.rowCount) throw httpError(404, '行程项不存在');
+  res.status(204).end();
+});
+
+const expenseCategories = new Set(['交通', '住宿', '餐饮', '门票', '购物', '其他']);
+
+app.post('/api/trips/:tripId/expenses', async (req, res) => {
+  const tripId = idParam(req.params.tripId, '旅行 ID');
+  const title = requiredText(req.body?.title, '费用标题', 160);
+  const amount = normalizeMoney(req.body?.amount, '费用金额');
+  const category = expenseCategories.has(req.body?.category) ? req.body.category : '其他';
+  const expenseDate = req.body?.expenseDate ? validDate(req.body.expenseDate, '费用') : null;
+  const paid = toBoolean(req.body?.paid);
+  const notes = cleanText(req.body?.notes, 2000);
+  const itemId = req.body?.itemId ? idParam(req.body.itemId, '关联行程 ID') : null;
+
+  const result = await pool.query(
+    `INSERT INTO expenses (trip_id, item_id, expense_date, category, title, amount, paid, notes, position)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8,
+            COALESCE((SELECT MAX(position) + 1 FROM expenses WHERE trip_id = $1), 0)
+     WHERE EXISTS (SELECT 1 FROM trips WHERE id = $1)
+       AND ($2::bigint IS NULL OR EXISTS (
+         SELECT 1 FROM itinerary_items i JOIN trip_days d ON d.id = i.day_id
+          WHERE i.id = $2 AND d.trip_id = $1
+       ))
+     RETURNING *`,
+    [tripId, itemId, expenseDate, category, title, amount, paid, notes]
+  );
+  if (!result.rowCount) throw httpError(400, '旅行不存在或关联行程不属于该旅行');
+  res.status(201).json(result.rows[0]);
+});
+
+app.put('/api/expenses/:id', async (req, res) => {
+  const id = idParam(req.params.id, '费用 ID');
+  const current = await pool.query('SELECT trip_id FROM expenses WHERE id = $1', [id]);
+  if (!current.rowCount) throw httpError(404, '费用不存在');
+  const tripId = current.rows[0].trip_id;
+
+  const title = requiredText(req.body?.title, '费用标题', 160);
+  const amount = normalizeMoney(req.body?.amount, '费用金额');
+  const category = expenseCategories.has(req.body?.category) ? req.body.category : '其他';
+  const expenseDate = req.body?.expenseDate ? validDate(req.body.expenseDate, '费用') : null;
+  const paid = toBoolean(req.body?.paid);
+  const notes = cleanText(req.body?.notes, 2000);
+  const itemId = req.body?.itemId ? idParam(req.body.itemId, '关联行程 ID') : null;
+
+  if (itemId) {
+    const belongs = await pool.query(
+      `SELECT 1 FROM itinerary_items i JOIN trip_days d ON d.id = i.day_id
+        WHERE i.id = $1 AND d.trip_id = $2`,
+      [itemId, tripId]
+    );
+    if (!belongs.rowCount) throw httpError(400, '关联行程不属于该旅行');
+  }
+
+  const result = await pool.query(
+    `UPDATE expenses
+        SET item_id = $2, expense_date = $3, category = $4, title = $5, amount = $6,
+            paid = $7, notes = $8, updated_at = now()
+      WHERE id = $1 RETURNING *`,
+    [id, itemId, expenseDate, category, title, amount, paid, notes]
+  );
+  res.json(result.rows[0]);
+});
+
+app.delete('/api/expenses/:id', async (req, res) => {
+  const result = await pool.query('DELETE FROM expenses WHERE id = $1', [idParam(req.params.id, '费用 ID')]);
+  if (!result.rowCount) throw httpError(404, '费用不存在');
   res.status(204).end();
 });
 

@@ -61,7 +61,9 @@ try {
       destination: '杭州',
       startDate: '2026-10-01',
       endDate: '2026-10-02',
-      notes: ''
+      notes: '',
+      budgetTotal: 12000,
+      currency: 'CNY'
     })
   });
   assert.equal(created.days.length, 2);
@@ -80,7 +82,15 @@ try {
       coordType: 'bd09ll',
       notes: '',
       references: [],
-      imageUrls: []
+      imageUrls: [],
+      details: {
+        kind: 'flight',
+        airline: 'China Eastern',
+        flightNo: 'MU5123',
+        departureAirport: '杭州萧山',
+        arrivalAirport: '北京首都',
+        seat: '21A'
+      }
     })
   });
 
@@ -123,6 +133,39 @@ try {
   assert.deepEqual(currentDay1.items.map(item => item.title), ['Second']);
   assert.deepEqual(currentDay2.items.map(item => item.title), ['First']);
   assert.equal(currentDay2.route_mode, 'walking');
+  assert.equal(currentDay2.items[0].details.kind, 'flight');
+  assert.equal(aggregate.trip.currency, 'CNY');
+  assert.equal(Number(aggregate.trip.budget_total), 12000);
+
+  const expense = await json(`/api/trips/${created.trip.id}/expenses`, {
+    method: 'POST',
+    body: JSON.stringify({
+      title: 'Hotel',
+      amount: 1280,
+      category: '住宿',
+      expenseDate: '2026-10-01',
+      paid: true,
+      notes: 'prepaid'
+    })
+  });
+  assert.equal(Number(expense.amount), 1280);
+  assert.equal(expense.paid, true);
+
+  aggregate = await json(`/api/trips/${created.trip.id}`);
+  assert.equal(aggregate.expenses.length, 1);
+  assert.equal(aggregate.expenses[0].title, 'Hotel');
+
+  await json(`/api/expenses/${expense.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      title: 'Hotel revised',
+      amount: 1300,
+      category: '住宿',
+      expenseDate: '2026-10-01',
+      paid: true,
+      notes: ''
+    })
+  });
 
   const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
   const uploadResponse = await fetch(`${base}/api/uploads/images`, {

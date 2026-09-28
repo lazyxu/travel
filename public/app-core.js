@@ -92,6 +92,36 @@ function showApp() {
   el.app.classList.remove('hidden');
 }
 
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function localTimeKey(date = new Date()) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatMoney(value, currency = 'CNY') {
+  const number = Number(value || 0);
+  try {
+    return new Intl.NumberFormat('zh-CN', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: currency === 'JPY' || currency === 'KRW' ? 0 : 2
+    }).format(number);
+  } catch {
+    return `${currency} ${number.toFixed(2)}`;
+  }
+}
+
+function daysBetween(from, to) {
+  const a = new Date(`${String(from).slice(0, 10)}T00:00:00`);
+  const b = new Date(`${String(to).slice(0, 10)}T00:00:00`);
+  return Math.round((b - a) / 86400000);
+}
+
 function formatDate(date) {
   if (!date) return '';
   const d = new Date(`${String(date).slice(0, 10)}T00:00:00`);
@@ -147,6 +177,18 @@ function extractImageRefs(value, maxItems = 12) {
     if (refs.length >= maxItems) break;
   }
   return refs;
+}
+
+function itemDetailsKind(item) {
+  return item?.details?.kind || '';
+}
+
+function detailsKindMeta(kind) {
+  return {
+    lodging: { icon: '🏨', label: '住宿' },
+    flight: { icon: '✈️', label: '航班' },
+    train: { icon: '🚄', label: '高铁 / 火车' }
+  }[kind] || null;
 }
 
 function formatItemTime(item) {
@@ -367,8 +409,12 @@ function parseRoute(pathname = window.location.pathname) {
   if (pathname === '/' || pathname === '') return { name: 'home' };
   let match = pathname.match(/^\/trips\/(\d+)\/day\/(\d+)\/?$/);
   if (match) return { name: 'day', tripId: match[1], dayId: match[2] };
+  match = pathname.match(/^\/trips\/(\d+)\/today\/?$/);
+  if (match) return { name: 'today', tripId: match[1] };
   match = pathname.match(/^\/trips\/(\d+)\/todos\/?$/);
   if (match) return { name: 'todos', tripId: match[1] };
+  match = pathname.match(/^\/trips\/(\d+)\/expenses\/?$/);
+  if (match) return { name: 'expenses', tripId: match[1] };
   match = pathname.match(/^\/trips\/(\d+)\/?$/);
   if (match) return { name: 'trip', tripId: match[1] };
   return { name: 'not-found' };
@@ -399,8 +445,23 @@ async function loadRoute() {
   el.backHome.classList.remove('hidden');
   el.bottomNav.classList.remove('hidden');
 
+  if (route.name === 'today') {
+    state.tab = 'today';
+    const today = localDateKey();
+    state.currentDayId = state.current.days.find(day => String(day.day_date).slice(0, 10) === today)?.id || state.current.days[0]?.id || null;
+    renderCurrent();
+    return;
+  }
+
   if (route.name === 'todos') {
     state.tab = 'todos';
+    state.currentDayId = state.current.days[0]?.id || null;
+    renderCurrent();
+    return;
+  }
+
+  if (route.name === 'expenses') {
+    state.tab = 'expenses';
     state.currentDayId = state.current.days[0]?.id || null;
     renderCurrent();
     return;
@@ -423,8 +484,12 @@ async function loadRoute() {
 
 function syncCurrentUrl({ replace = true } = {}) {
   if (!state.current?.trip?.id) return;
-  const path = state.tab === 'todos'
-    ? `/trips/${state.current.trip.id}/todos`
-    : `/trips/${state.current.trip.id}/day/${state.currentDayId}`;
+  const path = state.tab === 'today'
+    ? `/trips/${state.current.trip.id}/today`
+    : state.tab === 'todos'
+      ? `/trips/${state.current.trip.id}/todos`
+      : state.tab === 'expenses'
+        ? `/trips/${state.current.trip.id}/expenses`
+        : `/trips/${state.current.trip.id}/day/${state.currentDayId}`;
   history[replace ? 'replaceState' : 'pushState']({}, '', path);
 }

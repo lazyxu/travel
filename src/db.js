@@ -20,10 +20,15 @@ export async function migrate() {
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
         notes TEXT NOT NULL DEFAULT '',
+        budget_total NUMERIC(14,2) NOT NULL DEFAULT 0,
+        currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         CHECK (end_date >= start_date)
       );
+
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS budget_total NUMERIC(14,2) NOT NULL DEFAULT 0;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'CNY';
 
       CREATE TABLE IF NOT EXISTS trip_days (
         id BIGSERIAL PRIMARY KEY,
@@ -55,6 +60,7 @@ export async function migrate() {
         dianping_url TEXT NOT NULL DEFAULT '',
         links JSONB NOT NULL DEFAULT '[]'::jsonb,
         image_urls TEXT[] NOT NULL DEFAULT '{}',
+        details JSONB NOT NULL DEFAULT '{}'::jsonb,
         position INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -67,6 +73,7 @@ export async function migrate() {
       ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
       ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS coord_type VARCHAR(10) NOT NULL DEFAULT 'bd09ll';
       ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]'::jsonb;
+      ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS details JSONB NOT NULL DEFAULT '{}'::jsonb;
 
       UPDATE itinerary_items
          SET start_time = item_time
@@ -92,9 +99,25 @@ export async function migrate() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
 
+      CREATE TABLE IF NOT EXISTS expenses (
+        id BIGSERIAL PRIMARY KEY,
+        trip_id BIGINT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+        item_id BIGINT REFERENCES itinerary_items(id) ON DELETE SET NULL,
+        expense_date DATE,
+        category VARCHAR(30) NOT NULL DEFAULT '其他',
+        title TEXT NOT NULL,
+        amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (amount >= 0),
+        paid BOOLEAN NOT NULL DEFAULT false,
+        notes TEXT NOT NULL DEFAULT '',
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
       CREATE INDEX IF NOT EXISTS idx_trip_days_trip_date ON trip_days(trip_id, day_date);
       CREATE INDEX IF NOT EXISTS idx_items_day_position ON itinerary_items(day_id, position, start_time, item_time);
       CREATE INDEX IF NOT EXISTS idx_todos_trip_done_position ON todos(trip_id, done, position);
+      CREATE INDEX IF NOT EXISTS idx_expenses_trip_date_position ON expenses(trip_id, expense_date, position, id);
     `);
     await client.query('COMMIT');
   } catch (error) {
