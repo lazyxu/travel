@@ -152,8 +152,8 @@ function structuredDetailsHtml(item) {
       <div class="structured-card lodging">
         <div class="structured-title">🏨 ${escapeHtml(d.hotelName || item.title || '住宿')}</div>
         <div class="structured-grid">
-          ${(d.checkInDate || d.checkInTime) ? `<div><span>入住</span><strong>${escapeHtml([d.checkInDate, d.checkInTime].filter(Boolean).join(' '))}</strong></div>` : ''}
-          ${(d.checkOutDate || d.checkOutTime) ? `<div><span>退房</span><strong>${escapeHtml([d.checkOutDate, d.checkOutTime].filter(Boolean).join(' '))}</strong></div>` : ''}
+          ${(d.checkInDate || d.checkInTime) ? `<div><span>入住</span><strong>${escapeHtml(formatStructuredDateTime(d.checkInDate, d.checkInTime))}</strong></div>` : ''}
+          ${(d.checkOutDate || d.checkOutTime) ? `<div><span>退房</span><strong>${escapeHtml(formatStructuredDateTime(d.checkOutDate, d.checkOutTime))}</strong></div>` : ''}
           ${d.roomType ? `<div><span>房型</span><strong>${escapeHtml(d.roomType)}</strong></div>` : ''}
           ${d.bookingPlatform ? `<div><span>预订</span><strong>${escapeHtml(d.bookingPlatform)}</strong></div>` : ''}
           ${d.confirmationNo ? `<div><span>确认号</span><strong>${escapeHtml(d.confirmationNo)}</strong></div>` : ''}
@@ -168,9 +168,9 @@ function structuredDetailsHtml(item) {
       <div class="structured-card flight">
         <div class="structured-title">✈️ ${escapeHtml([d.airline, d.flightNo].filter(Boolean).join(' ') || item.title)}</div>
         <div class="transport-route">
-          <div><strong>${escapeHtml(d.departureAirport || '出发')}</strong><span>${escapeHtml([d.departureDate, d.departureTime, d.departureTerminal].filter(Boolean).join(' · '))}</span></div>
+          <div><strong>${escapeHtml(d.departureAirport || '出发')}</strong><span>${escapeHtml([formatStructuredDateTime(d.departureDate, d.departureTime), d.departureTerminal].filter(Boolean).join(' · '))}</span></div>
           <div class="transport-arrow">→</div>
-          <div><strong>${escapeHtml(d.arrivalAirport || '到达')}</strong><span>${escapeHtml([d.arrivalDate, d.arrivalTime, d.arrivalTerminal].filter(Boolean).join(' · '))}</span></div>
+          <div><strong>${escapeHtml(d.arrivalAirport || '到达')}</strong><span>${escapeHtml([formatStructuredDateTime(d.arrivalDate, d.arrivalTime), d.arrivalTerminal].filter(Boolean).join(' · '))}</span></div>
         </div>
         ${(d.seat || d.confirmationNo) ? `<div class="structured-foot">${d.seat ? `座位 ${escapeHtml(d.seat)}` : ''}${d.seat && d.confirmationNo ? ' · ' : ''}${d.confirmationNo ? `确认号 ${escapeHtml(d.confirmationNo)}` : ''}</div>` : ''}
       </div>
@@ -182,9 +182,9 @@ function structuredDetailsHtml(item) {
       <div class="structured-card train">
         <div class="structured-title">🚄 ${escapeHtml(d.trainNo || item.title)}</div>
         <div class="transport-route">
-          <div><strong>${escapeHtml(d.departureStation || '出发')}</strong><span>${escapeHtml([d.departureDate, d.departureTime].filter(Boolean).join(' · '))}</span></div>
+          <div><strong>${escapeHtml(d.departureStation || '出发')}</strong><span>${escapeHtml(formatStructuredDateTime(d.departureDate, d.departureTime))}</span></div>
           <div class="transport-arrow">→</div>
-          <div><strong>${escapeHtml(d.arrivalStation || '到达')}</strong><span>${escapeHtml([d.arrivalDate, d.arrivalTime].filter(Boolean).join(' · '))}</span></div>
+          <div><strong>${escapeHtml(d.arrivalStation || '到达')}</strong><span>${escapeHtml(formatStructuredDateTime(d.arrivalDate, d.arrivalTime))}</span></div>
         </div>
         ${(d.carriage || d.seat || d.confirmationNo) ? `<div class="structured-foot">${[d.carriage ? `${escapeHtml(d.carriage)}车` : '', d.seat ? `${escapeHtml(d.seat)}座` : '', d.confirmationNo ? `确认号 ${escapeHtml(d.confirmationNo)}` : ''].filter(Boolean).join(' · ')}</div>` : ''}
       </div>
@@ -221,7 +221,7 @@ function hotelStayAnchorHtml(item, { readonly = false } = {}) {
 
 function itemCardHtml(item, { readonly = false } = {}) {
   if (item?._virtualStay) return hotelStayAnchorHtml(item, { readonly });
-  const category = categoryMeta(item.category);
+  const category = itemCategoryMeta(item);
   const images = Array.isArray(item.image_urls) ? item.image_urls : [];
   const links = Array.isArray(item.links) ? item.links : [];
   const displayLocation = itemLocationLabel(item);

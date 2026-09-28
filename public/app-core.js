@@ -11,6 +11,21 @@ function categoryMeta(category) {
   return CATEGORY_META[category] || CATEGORY_META['其他'];
 }
 
+function itemCategoryMeta(item) {
+  const kind = item?.details?.kind || '';
+  if (kind === 'lodging') return { icon: '🏨', label: '酒店' };
+  if (kind === 'flight') return { icon: '✈️', label: '航班' };
+  if (kind === 'train') return { icon: '🚄', label: '高铁 / 火车' };
+  return categoryMeta(item?.category);
+}
+
+function formatStructuredDateTime(date, time) {
+  const parts = [];
+  if (date) parts.push(formatDate(date));
+  if (time) parts.push(time);
+  return parts.join(' ');
+}
+
 const state = {
   trips: [],
   current: null,

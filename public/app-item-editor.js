@@ -703,6 +703,25 @@ function bindCompactItemEditor(mainForm, item) {
         openItemSubsheet(`${meta.icon} ${meta.label}信息`, itemEditorDetailsFormHtml(meta.kind, current), async data => {
           const next = itemEditorCollectDetails(meta.kind, data);
           detailsInput.value = JSON.stringify(next);
+
+          const titleInput = mainForm.querySelector('[name="title"]');
+          const startInput = mainForm.querySelector('[name="startTime"]');
+          const endInput = mainForm.querySelector('[name="endTime"]');
+
+          if (titleInput && !titleInput.value.trim()) {
+            if (meta.kind === 'lodging' && next.hotelName) titleInput.value = next.hotelName;
+            if (meta.kind === 'flight') {
+              const title = [next.airline, next.flightNo].filter(Boolean).join(' ');
+              if (title) titleInput.value = title;
+            }
+            if (meta.kind === 'train' && next.trainNo) titleInput.value = next.trainNo;
+          }
+
+          if ((meta.kind === 'flight' || meta.kind === 'train')) {
+            if (startInput && !startInput.value && next.departureTime) startInput.value = next.departureTime;
+            if (endInput && !endInput.value && next.arrivalTime) endInput.value = next.arrivalTime;
+          }
+
           updateCompactItemAddon(mainForm, 'details', itemEditorDetailsSummary(typeSelect.value, next), true, '编辑');
           closeItemSubsheet();
         });
