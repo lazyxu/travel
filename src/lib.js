@@ -172,7 +172,7 @@ export function normalizeItemDetails(value) {
   }
 
   const allowed = {
-    lodging: ['hotelName', 'checkInDate', 'checkInTime', 'checkOutDate', 'checkOutTime', 'roomType', 'phone', 'bookingPlatform', 'confirmationNo'],
+    lodging: ['hotelName', 'checkInDate', 'checkInTime', 'checkOutDate', 'checkOutTime', 'roomType', 'phone', 'bookingPlatform', 'bookingUrl', 'confirmationNo'],
     flight: ['airline', 'flightNo', 'departureDate', 'departureTime', 'departureAirport', 'departureTerminal', 'arrivalDate', 'arrivalTime', 'arrivalAirport', 'arrivalTerminal', 'seat', 'confirmationNo'],
     train: ['trainNo', 'departureDate', 'departureTime', 'departureStation', 'arrivalDate', 'arrivalTime', 'arrivalStation', 'carriage', 'seat', 'confirmationNo']
   };
@@ -180,7 +180,7 @@ export function normalizeItemDetails(value) {
 
   const result = { kind };
   for (const key of allowed[kind]) {
-    const max = key.toLowerCase().includes('date') ? 10 : key.toLowerCase().includes('time') ? 5 : 160;
+    const max = key === 'bookingUrl' ? 2000 : key.toLowerCase().includes('date') ? 10 : key.toLowerCase().includes('time') ? 5 : 160;
     result[key] = cleanText(source[key], max);
   }
   if (kind === 'lodging') {
@@ -191,6 +191,7 @@ export function normalizeItemDetails(value) {
     }
     if (result.checkInTime) result.checkInTime = normalizeTime(result.checkInTime);
     if (result.checkOutTime) result.checkOutTime = normalizeTime(result.checkOutTime);
+    if (result.bookingUrl) result.bookingUrl = optionalUrl(result.bookingUrl, '酒店预订链接');
   }
   return result;
 }
