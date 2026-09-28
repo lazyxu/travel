@@ -597,3 +597,32 @@ button { color: inherit; }
   .image-editor-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .image-editor-toolbar { grid-template-columns: 1fr; }
 }
+
+.pwa-update {
+  position: fixed;
+  z-index: 130;
+  left: 50%;
+  top: calc(12px + env(safe-area-inset-top));
+  transform: translateX(-50%);
+  width: min(calc(100% - 24px), 420px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #202420;
+  color: #fff;
+  box-shadow: var(--shadow);
+  font-size: 12px;
+}
+.pwa-update button {
+  border: 0;
+  border-radius: 9px;
+  padding: 7px 10px;
+  background: #fff;
+  color: #202420;
+  font-weight: 800;
+  cursor: pointer;
+}
+.pwa-update button:disabled { opacity: .65; cursor: default; }

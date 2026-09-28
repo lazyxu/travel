@@ -1,8 +1,9 @@
-const CACHE = 'travel-shell-v1';
+const CACHE = 'travel-shell-v3';
 const SHELL = [
   '/',
   '/app.css',
   '/app-core.js',
+  '/app-extra.js',
   '/app-render.js',
   '/app-forms.js',
   '/manifest.webmanifest',
@@ -12,7 +13,10 @@ const SHELL = [
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
-  self.skipWaiting();
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
