@@ -107,6 +107,14 @@ try {
       notes: '',
       references: [],
       imageUrls: [],
+      details: {
+        kind: 'dining',
+        selectedCandidateId: '',
+        candidates: [
+          { id: 'food-a', name: '餐厅A', address: '杭州市A路', locationUid: 'food-a-uid', latitude: 30.31, longitude: 120.21, coordType: 'bd09ll' },
+          { id: 'food-b', name: '餐厅B', address: '杭州市B路', locationUid: 'food-b-uid', latitude: 30.32, longitude: 120.22, coordType: 'bd09ll' }
+        ]
+      },
       expense: {
         amount: 88,
         category: '餐饮',
@@ -116,6 +124,9 @@ try {
   });
   assert.equal(Number(second.expense.amount), 88);
   assert.equal(String(second.expense.item_id), String(second.id));
+  assert.equal(second.location_name, '餐厅A');
+  assert.equal(second.location_uid, 'food-a-uid');
+  assert.equal(second.details.candidates[0].name, '餐厅A');
 
   await json(`/api/days/${day1.id}/items/order`, {
     method: 'PUT',
@@ -136,6 +147,13 @@ try {
   let currentDay1 = aggregate.days.find(day => String(day.id) === String(day1.id));
   assert.deepEqual(currentDay1.items.map(item => item.title), ['Second', 'First']);
   assert.equal(currentDay1.leg_modes[`item:${second.id}>item:${first.id}`], 'walking');
+  const selectedDining = await json(`/api/items/${second.id}/dining-selection`, {
+    method: 'PUT',
+    body: JSON.stringify({ candidateId: 'food-b' })
+  });
+  assert.equal(selectedDining.details.selectedCandidateId, 'food-b');
+  assert.equal(selectedDining.details.candidates[0].id, 'food-b');
+  assert.equal(selectedDining.location_name, '餐厅B');
 
   await json(`/api/items/${first.id}/move`, {
     method: 'PUT',

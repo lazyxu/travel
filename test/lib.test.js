@@ -225,3 +225,17 @@ test('order text parser extracts hotel flight and train fields', () => {
   assert.equal(train.details.departureStation, '杭州东');
   assert.equal(train.details.carriage, '03');
 });
+
+
+test('dining candidates preserve order and selection', () => {
+  const details = normalizeItemDetails({
+    kind: 'dining',
+    selectedCandidateId: 'b',
+    candidates: [
+      { id: 'a', name: 'A店', latitude: 30.1, longitude: 120.1, coordType: 'bd09ll' },
+      { id: 'b', name: 'B店', latitude: 30.2, longitude: 120.2, coordType: 'bd09ll' }
+    ]
+  });
+  assert.deepEqual(details.candidates.map(candidate => candidate.id), ['a', 'b']);
+  assert.equal(details.selectedCandidateId, 'b');
+});

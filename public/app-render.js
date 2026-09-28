@@ -134,6 +134,12 @@ function renderItinerary() {
     el.main.querySelector('#add-item').addEventListener('click', () => openItemForm(day));
     bindItinerarySorting(day);
     bindItineraryActions(day);
+    el.main.querySelectorAll('[data-choose-dining]').forEach(button => {
+      button.addEventListener('click', () => {
+        const item = tripItemById(button.dataset.chooseDining);
+        if (item) openDiningQuickSelect(item);
+      });
+    });
     el.main.querySelectorAll('[data-edit-item]').forEach(button => {
       button.addEventListener('click', () => {
         const item = tripItemById(button.dataset.editItem);
@@ -146,6 +152,21 @@ function renderItinerary() {
 function structuredDetailsHtml(item) {
   const d = item?.details || {};
   if (!d.kind) return '';
+
+  if (d.kind === 'dining') {
+    const candidates = Array.isArray(d.candidates) ? d.candidates : [];
+    const first = candidates[0];
+    const selected = candidates.find(candidate => candidate.id === d.selectedCandidateId);
+    if (!candidates.length) return '';
+    return `
+      <div class="dining-summary">
+        <strong>候选 ${candidates.length} 家</strong>
+        <span>📍 路线：${escapeHtml(first?.name || '第1家')}</span>
+        ${selected ? `<span>✓ 已选：${escapeHtml(selected.name || '候选餐厅')}</span>` : ''}
+        ${first && (first.latitude === null || first.latitude === undefined) ? '<span>⚠ 第1家未定位</span>' : ''}
+      </div>
+    `;
+  }
 
   if (d.kind === 'lodging') {
     const detailTitle = d.hotelName || '';
@@ -236,6 +257,7 @@ function itemCardHtml(item, { readonly = false } = {}) {
         <div class="timeline-top">
           <span class="category"><span class="category-icon" aria-hidden="true">${category.icon}</span>${escapeHtml(category.label)}</span>
           ${readonly ? '' : `<div class="card-actions">
+            ${item.details?.kind === 'dining' && item.details?.candidates?.length ? `<button class="card-action" type="button" data-choose-dining="${attr(item.id)}">选餐厅</button>` : ''}
             <button class="drag-handle" type="button" data-drag-handle aria-label="拖动排序">⋮⋮</button>
             <button class="card-action" type="button" data-edit-item="${attr(item.id)}" aria-label="编辑">编辑</button>
           </div>`}

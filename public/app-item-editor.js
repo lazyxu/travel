@@ -1235,6 +1235,57 @@ function bindCompactItemEditor(mainForm, item) {
   });
 }
 
+function openDiningQuickSelect(item) {
+  const candidates = Array.isArray(item?.details?.candidates) ? item.details.candidates : [];
+  if (!candidates.length) return showToast('还没有候选餐厅', 'error');
+
+  const body = `
+    <div class="stack">
+      <div class="dining-manager-help">
+        <strong>选择最终餐厅</strong>
+        <span>选中后会自动移到第 1 位；第 1 家始终作为路线定位。</span>
+      </div>
+      <div class="dining-quick-list">
+        ${candidates.map((candidate, index) => `
+          <button class="dining-quick-option ${candidate.id === item.details.selectedCandidateId ? 'selected' : ''}" type="button" data-quick-dining="${attr(candidate.id)}">
+            <span class="dining-candidate-rank">${index + 1}</span>
+            <span class="dining-quick-copy">
+              <strong>${escapeHtml(candidate.name || '候选餐厅')}</strong>
+              <small>${escapeHtml(candidate.address || (candidate.latitude !== null && candidate.latitude !== undefined ? '已定位' : '未定位'))}</small>
+            </span>
+            <em>${index === 0 ? '📍 路线' : ''}${candidate.id === item.details.selectedCandidateId ? ' · ✓ 已选' : ''}</em>
+          </button>
+        `).join('')}
+      </div>
+      <button class="button ghost full" type="button" data-manage-dining>管理候选与排序</button>
+    </div>
+  `;
+
+  const subForm = openItemSubsheet('🍜 选餐厅', body, async () => {});
+  subForm.querySelectorAll('[data-quick-dining]').forEach(button => {
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await api(`/api/items/${item.id}/dining-selection`, {
+          method: 'PUT',
+          body: JSON.stringify({ candidateId: button.dataset.quickDining })
+        });
+        closeItemSubsheet(true);
+        await refreshCurrent();
+        showToast('已选择餐厅，并设为路线第1家');
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message, 'error');
+      }
+    });
+  });
+  subForm.querySelector('[data-manage-dining]')?.addEventListener('click', () => {
+    closeItemSubsheet(true);
+    const day = state.current.days.find(day => day.items.some(entry => String(entry.id) === String(item.id)));
+    if (day) openItemForm(day, item);
+  });
+}
+
 function openItemForm(day, item = null) {
   openSheet(item ? '编辑行程' : '添加行程', compactItemFormHtml(item || {}, day.id), async formData => {
     const mainForm = el.sheetForm;
