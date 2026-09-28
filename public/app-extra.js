@@ -271,33 +271,39 @@ async function openShareManager() {
   }
 }
 
-function referenceEditorRowHtml(ref = {}) {
+function referenceEditorRowHtml(ref = {}, index = 0) {
+  const value = ref.value || ref.url || '';
+  const platform = ref.platform || detectReferencePlatform(value);
+  const meta = referencePlatformMeta(platform);
+  const title = ref.customTitle || ref.autoTitle || meta.label;
   const autoTitle = ref.autoTitle || '';
   return `
-    <div class="reference-editor-row">
-      <div class="reference-editor-fields">
-        <div class="reference-editor-auto">
-          <span>自动标题</span>
-          <strong data-reference-auto-label>${escapeHtml(autoTitle || '尚未提取')}</strong>
-        </div>
-        <input name="refTitle" maxlength="180" value="${attr(ref.customTitle || '')}" placeholder="自定义展示标题（可选，优先显示）" />
-        <input name="refValue" maxlength="3000" value="${attr(ref.value || '')}" data-initial-value="${attr(ref.value || '')}" placeholder="粘贴小红书 / 抖音 / 点评 / 微信等链接" />
-        <input name="refAutoTitle" type="hidden" value="${attr(autoTitle)}" />
+    <div class="reference-analysis-card" data-reference-row data-reference-index="${index}">
+      <input name="refTitle" type="hidden" value="${attr(ref.customTitle || '')}" />
+      <input name="refAutoTitle" type="hidden" value="${attr(autoTitle)}" />
+      <input name="refValue" type="hidden" value="${attr(value)}" />
+      <input name="refPlatform" type="hidden" value="${attr(platform)}" />
+      <input name="refAppUrl" type="hidden" value="${attr(ref.appUrl || '')}" />
+      <div class="reference-analysis-icon">${meta.icon}</div>
+      <div class="reference-analysis-copy">
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(meta.label)} · ${escapeHtml(value)}</span>
       </div>
+      <button class="button ghost small" type="button" data-edit-reference>编辑</button>
       <button class="reference-remove" type="button" data-remove-reference aria-label="删除参考入口">×</button>
     </div>
   `;
 }
 
 function referenceEditorHtml(refs = []) {
-  const list = refs.length ? refs : [{ customTitle: '', autoTitle: '', value: '' }];
+  const list = Array.isArray(refs) ? refs : [];
   return `
     <div class="reference-editor" data-reference-editor>
       <div class="reference-editor-list" data-reference-list>
-        ${list.map(referenceEditorRowHtml).join('')}
+        ${list.length ? list.map(referenceEditorRowHtml).join('') : '<div class="reference-editor-empty" data-reference-empty>还没有参考链接</div>'}
       </div>
-      <button id="add-reference-row" class="button ghost small" type="button">＋ 添加参考入口</button>
-      <p class="form-help">自定义标题优先显示；留空时才自动抓取。已提取的自动标题会缓存，后续保存不会重复访问第三方网站。</p>
+      <button class="button ghost small" type="button" data-add-reference>＋ 添加链接</button>
+      <p class="form-help">每个链接都会先自动分析平台和标题，再由你确认或修改；百度地图链接会自动识别为地点。</p>
     </div>
   `;
 }
@@ -306,6 +312,8 @@ function collectReferenceEntries(form) {
   const customTitles = form.getAll('refTitle');
   const autoTitles = form.getAll('refAutoTitle');
   const values = form.getAll('refValue');
+  const platforms = form.getAll('refPlatform');
+  const appUrls = form.getAll('refAppUrl');
   const refs = [];
   for (let index = 0; index < values.length; index += 1) {
     const value = String(values[index] || '').trim();
@@ -313,7 +321,9 @@ function collectReferenceEntries(form) {
     refs.push({
       value,
       customTitle: String(customTitles[index] || '').trim(),
-      autoTitle: String(autoTitles[index] || '').trim()
+      autoTitle: String(autoTitles[index] || '').trim(),
+      platform: String(platforms[index] || '').trim(),
+      appUrl: String(appUrls[index] || '').trim()
     });
     if (refs.length >= 12) break;
   }
