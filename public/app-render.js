@@ -9,8 +9,14 @@ function tripCardHtml(trip) {
       <div class="trip-meta">${trip.destination ? `${escapeHtml(trip.destination)} · ` : ''}${escapeHtml(formatRange(trip.start_date, trip.end_date))}</div>
       ${status.kind === 'active' && status.progress !== null ? `<div class="trip-progress" aria-label="旅行进度 ${status.progress}%"><i style="width: ${status.progress}%"></i></div>` : ''}
       <div class="trip-stats">
-        <span class="pill">⌁ ${trip.item_count} 项行程</span>
-        <span class="pill">✓ ${trip.todo_count} 项待办</span>
+        <span class="pill">
+          <svg class="pill-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v3M18 3v3M4.5 8.5h15M5 5h14a1.5 1.5 0 0 1 1.5 1.5v12A1.5 1.5 0 0 1 19 20H5a1.5 1.5 0 0 1-1.5-1.5v-12A1.5 1.5 0 0 1 5 5Z"/></svg>
+          ${trip.item_count} 项行程
+        </span>
+        <span class="pill">
+          <svg class="pill-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h10M9 12h10M9 18h10"/><path d="m4 6 1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>
+          ${trip.todo_count} 项待办
+        </span>
       </div>
     </article>
   `;

@@ -2829,3 +2829,15 @@ body.dialog-open{
 .past-trip-grid{
   padding: 2px 0 6px;
 }
+
+
+/* Trip statistic icons */
+.pill-icon{
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
