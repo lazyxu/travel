@@ -13,7 +13,7 @@ import {
   normalizeUrlList,
   optionalUrl
 } from '../src/lib.js';
-import { detectPlatform, dianpingAppUrl, extractContentTitle, extractDianpingShopId, extractHtmlTitle, isPrivateAddress } from '../src/link-preview.js';
+import { deriveHotelName, detectBookingPlatform, detectPlatform, dianpingAppUrl, extractContentTitle, extractDianpingShopId, extractHtmlTitle, isPrivateAddress } from '../src/link-preview.js';
 import { normalizeBaiduPoiPayload, parseBaiduMapLink } from '../src/baidu.js';
 
 test('enumerateDates includes both ends', () => {
@@ -173,4 +173,23 @@ test('Dianping links generate app deep links', () => {
     dianpingAppUrl('https://dpurl.cn/abc', '短链标题', 'https://www.dianping.com/shop/H9wHsyrJkbVJWu2g'),
     'dianping://shopinfo?id=H9wHsyrJkbVJWu2g'
   );
+});
+
+
+test('hotel booking platforms and names are normalized', () => {
+  assert.equal(detectBookingPlatform('https://www.hworld.com/hotel/123'), '华住会');
+  assert.equal(detectBookingPlatform('https://hotels.ctrip.com/hotels/123.html'), '携程');
+  assert.equal(deriveHotelName('杭州西湖全季酒店 - 华住会', '华住会'), '杭州西湖全季酒店');
+  assert.equal(deriveHotelName('上海静安酒店 | Booking.com', 'Booking.com'), '上海静安酒店');
+});
+
+test('lodging details accept booking URL', () => {
+  const details = normalizeItemDetails({
+    kind: 'lodging',
+    hotelName: '全季酒店',
+    bookingPlatform: '华住会',
+    bookingUrl: 'https://www.hworld.com/hotel/123'
+  });
+  assert.equal(details.bookingPlatform, '华住会');
+  assert.match(details.bookingUrl, /^https:\/\//);
 });
