@@ -1400,7 +1400,11 @@ function openItemForm(day, item = null) {
 
   if (item) {
     mainForm.querySelector('#delete-item')?.addEventListener('click', async event => {
-      if (!confirm(`确定删除“${item.title}”吗？此操作不可恢复。`)) return;
+      if (!await confirmAction({
+        title: '删除行程？',
+        message: `将删除“${item.title}”以及与它关联的行程信息，此操作无法恢复。`,
+        confirmLabel: '删除行程'
+      })) return;
       const button = event.currentTarget;
       setButtonBusy(button, true, '删除中…');
       try {

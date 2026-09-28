@@ -407,12 +407,20 @@ async function openShareManager() {
     });
 
     el.sheetForm.querySelector('#disable-share-link')?.addEventListener('click', async event => {
+      if (!await confirmAction({
+        title: '关闭分享？',
+        message: '关闭后，当前分享链接将立即失效，其他人将无法继续访问。',
+        confirmLabel: '关闭分享'
+      })) return;
+      const button = event.currentTarget;
+      setButtonBusy(button, true, '关闭中…');
       try {
-        const id = event.currentTarget.dataset.shareId;
+        const id = button.dataset.shareId;
         await api(`/api/shares/${id}`, { method: 'DELETE' });
-        closeSheet();
+        closeSheet(true);
         showToast('分享已关闭');
       } catch (error) {
+        setButtonBusy(button, false);
         showToast(error.message, 'error');
       }
     });

@@ -65,7 +65,11 @@ function openTripForm(trip = null) {
 
   if (trip) {
     el.sheetForm.querySelector('#delete-trip').addEventListener('click', async event => {
-      if (!confirm(`确定删除“${trip.title}”及全部行程和待办吗？此操作不可恢复。`)) return;
+      if (!await confirmAction({
+        title: '删除旅行？',
+        message: `“${trip.title}”的全部行程、费用和待办都会被删除，且无法恢复。`,
+        confirmLabel: '删除旅行'
+      })) return;
       const button = event.currentTarget;
       setButtonBusy(button, true, '删除中…');
       try {
@@ -180,7 +184,11 @@ function openExpenseForm(expense = null, linkedItem = null) {
 
   if (expense) {
     el.sheetForm.querySelector('#delete-expense').addEventListener('click', async event => {
-      if (!confirm(`确定删除“${expense.title}”吗？此操作不可恢复。`)) return;
+      if (!await confirmAction({
+        title: '删除费用？',
+        message: `将删除“${expense.title}”，此操作无法恢复。`,
+        confirmLabel: '删除费用'
+      })) return;
       const button = event.currentTarget;
       setButtonBusy(button, true, '删除中…');
       try {
@@ -244,7 +252,11 @@ function openTodoForm(todo = null) {
 
   if (todo) {
     el.sheetForm.querySelector('#delete-todo').addEventListener('click', async event => {
-      if (!confirm(`确定删除“${todo.title}”吗？此操作不可恢复。`)) return;
+      if (!await confirmAction({
+        title: '删除待办？',
+        message: `将删除“${todo.title}”，此操作无法恢复。`,
+        confirmLabel: '删除待办'
+      })) return;
       const button = event.currentTarget;
       setButtonBusy(button, true, '删除中…');
       try {

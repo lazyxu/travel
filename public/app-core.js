@@ -817,7 +817,7 @@ function registerPwa() {
 registerPwa();
 
 function topOpenDialog() {
-  const selectors = ['#order-analyzer', '#link-analyzer', '#item-subsheet', '#sheet'];
+  const selectors = ['#action-confirm', '#order-analyzer', '#link-analyzer', '#item-subsheet', '#sheet'];
   for (const selector of selectors) {
     const node = document.querySelector(selector);
     if (node && !node.classList.contains('hidden')) return node;
@@ -848,6 +848,76 @@ function restoreDialogFocus(root) {
     if (!target?.isConnected) return;
     try { target.focus({ preventScroll: true }); } catch { target.focus?.(); }
   }, 0);
+}
+
+const actionConfirmState = { resolve: null };
+
+function ensureActionConfirm() {
+  let modal = document.querySelector('#action-confirm');
+  if (modal) return modal;
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="action-confirm-backdrop" class="action-confirm-backdrop hidden"></div>
+    <section id="action-confirm" class="action-confirm hidden" role="alertdialog" aria-modal="true" aria-labelledby="action-confirm-title" aria-describedby="action-confirm-message">
+      <div class="action-confirm-icon" aria-hidden="true">!</div>
+      <div class="action-confirm-copy">
+        <h2 id="action-confirm-title">确认操作</h2>
+        <p id="action-confirm-message"></p>
+      </div>
+      <div class="action-confirm-actions">
+        <button class="button ghost" type="button" data-action-confirm-cancel>取消</button>
+        <button class="button danger" type="button" data-action-confirm-ok>确认</button>
+      </div>
+    </section>
+  `);
+
+  modal = document.querySelector('#action-confirm');
+  const backdrop = document.querySelector('#action-confirm-backdrop');
+  const finish = value => {
+    if (modal.classList.contains('hidden')) return;
+    modal.classList.add('hidden');
+    backdrop?.classList.add('hidden');
+    syncDialogBodyLock();
+    restoreDialogFocus(modal);
+    const resolve = actionConfirmState.resolve;
+    actionConfirmState.resolve = null;
+    resolve?.(Boolean(value));
+  };
+
+  modal.querySelector('[data-action-confirm-cancel]')?.addEventListener('click', () => finish(false));
+  modal.querySelector('[data-action-confirm-ok]')?.addEventListener('click', () => finish(true));
+  backdrop?.addEventListener('click', () => finish(false));
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || modal.classList.contains('hidden')) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    finish(false);
+  }, true);
+
+  modal._finishConfirm = finish;
+  return modal;
+}
+
+function confirmAction({ title = '确认操作', message = '', confirmLabel = '确认', danger = true } = {}) {
+  const modal = ensureActionConfirm();
+  const backdrop = document.querySelector('#action-confirm-backdrop');
+  const ok = modal.querySelector('[data-action-confirm-ok]');
+  modal.querySelector('#action-confirm-title').textContent = title;
+  modal.querySelector('#action-confirm-message').textContent = message;
+  ok.textContent = confirmLabel;
+  ok.classList.toggle('danger', Boolean(danger));
+  ok.classList.toggle('primary', !danger);
+
+  if (actionConfirmState.resolve) actionConfirmState.resolve(false);
+
+  modal.classList.remove('hidden');
+  backdrop?.classList.remove('hidden');
+  syncDialogBodyLock();
+  focusDialogInitial(modal, ok);
+
+  return new Promise(resolve => {
+    actionConfirmState.resolve = resolve;
+  });
 }
 
 document.addEventListener('keydown', event => {

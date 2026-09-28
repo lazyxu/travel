@@ -2660,3 +2660,65 @@ body.dialog-open{
     animation: none;
   }
 }
+
+
+/* In-app destructive confirmation */
+.action-confirm-backdrop{
+  position: fixed;
+  z-index: 240;
+  inset: 0;
+  background: rgba(12,16,14,.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.action-confirm{
+  position: fixed;
+  z-index: 245;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(calc(100% - 32px), 390px);
+  display: grid;
+  grid-template-columns: 42px minmax(0,1fr);
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(20,25,22,.22);
+}
+.action-confirm-icon{
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 18px;
+  font-weight: 900;
+}
+.action-confirm-copy{
+  min-width: 0;
+}
+.action-confirm-copy h2{
+  margin: 1px 0 5px;
+  font-size: var(--font-title);
+  line-height: 1.25;
+}
+.action-confirm-copy p{
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+  line-height: 1.5;
+}
+.action-confirm-actions{
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+.action-confirm-actions .button{
+  width: 100%;
+}
