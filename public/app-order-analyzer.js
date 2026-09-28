@@ -52,6 +52,7 @@ function closeOrderAnalyzer(force = false) {
   modal.classList.add('hidden');
   document.querySelector('#order-analyzer-backdrop')?.classList.add('hidden');
   if (form) { form.innerHTML = ''; form.onsubmit = null; form.dataset.dirty = '0'; }
+  syncDialogBodyLock();
   return true;
 }
 
@@ -130,6 +131,7 @@ function openOrderAnalyzer({ kind, anchorDate = '', title = '解析订单文本'
 
   document.querySelector('#order-analyzer-backdrop').classList.remove('hidden');
   modal.classList.remove('hidden');
+  syncDialogBodyLock();
   setTimeout(() => textInput.focus(), 50);
   return form;
 }

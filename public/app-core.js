@@ -707,10 +707,10 @@ function registerPwa() {
       if (!banner || !button || !worker || !navigator.serviceWorker.controller) return;
       banner.classList.remove('hidden');
       button.disabled = false;
-      button.textContent = '立即刷新';
+      button.textContent = '更新';
       button.onclick = () => {
         button.disabled = true;
-        button.textContent = '刷新中…';
+        button.textContent = '更新中…';
         worker.postMessage({ type: 'SKIP_WAITING' });
       };
     };
@@ -758,6 +758,15 @@ function registerPwa() {
 }
 registerPwa();
 
+function syncDialogBodyLock() {
+  const selectors = ['#sheet', '#item-subsheet', '#link-analyzer', '#order-analyzer'];
+  const open = selectors.some(selector => {
+    const node = document.querySelector(selector);
+    return node && !node.classList.contains('hidden');
+  });
+  document.body.classList.toggle('dialog-open', open);
+}
+
 function openSheet(title, body, onSubmit) {
   el.sheetTitle.textContent = title;
   el.sheetForm.innerHTML = body;
@@ -774,6 +783,7 @@ function openSheet(title, body, onSubmit) {
   };
   el.sheetBackdrop.classList.remove('hidden');
   el.sheet.classList.remove('hidden');
+  syncDialogBodyLock();
 }
 
 function closeSheet() {
@@ -781,6 +791,7 @@ function closeSheet() {
   el.sheetBackdrop.classList.add('hidden');
   el.sheetForm.innerHTML = '';
   el.sheetForm.onsubmit = null;
+  syncDialogBodyLock();
 }
 
 async function loadTrips() {

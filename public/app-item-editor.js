@@ -194,6 +194,7 @@ function openItemSubsheet(title, body, onSubmit) {
   };
   document.querySelector('#item-subsheet-backdrop').classList.remove('hidden');
   sheet.classList.remove('hidden');
+  syncDialogBodyLock();
   return form;
 }
 
@@ -212,6 +213,7 @@ function closeItemSubsheet(force = false) {
     form.onchange = null;
     form.dataset.dirty = '0';
   }
+  syncDialogBodyLock();
   return true;
 }
 

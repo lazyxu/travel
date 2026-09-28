@@ -50,6 +50,7 @@ function closeLinkAnalyzer(force = false) {
     form.onsubmit = null;
     form.dataset.dirty = '0';
   }
+  syncDialogBodyLock();
   return true;
 }
 
@@ -307,6 +308,7 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
 
   document.querySelector('#link-analyzer-backdrop').classList.remove('hidden');
   modal.classList.remove('hidden');
+  syncDialogBodyLock();
   setTimeout(() => valueInput.focus(), 50);
   return form;
 }
