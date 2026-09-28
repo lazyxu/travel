@@ -511,6 +511,127 @@ function bindImageEditorWithin(root) {
   });
 }
 
+function expenseCategoryForItem(item) {
+  if (item?.details?.kind === 'lodging') return '住宿';
+  if (item?.category === '景点') return '门票';
+  if (['交通','住宿','餐饮','购物'].includes(item?.category)) return item.category;
+  return '其他';
+}
+
+function itemExpenseSummary(item, expenses = itemExpenses(item)) {
+  if (!expenses.length) return '未添加费用';
+  const currency = state.current?.trip?.currency || 'CNY';
+  const total = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const paidCount = expenses.filter(expense => expense.paid).length;
+  return `${expenses.length} 笔 · ${formatMoney(total, currency)}${paidCount ? ` · 已付 ${paidCount}` : ''}`;
+}
+
+function existingExpenseRowHtml(expense = {}, index = 0, item = {}) {
+  const category = expense.category || expenseCategoryForItem(item);
+  return `
+    <div class="compact-expense-row" data-expense-row data-expense-id="${attr(expense.id || '')}">
+      <div class="compact-expense-head">
+        <strong>费用 ${index + 1}</strong>
+        <button class="reference-remove" type="button" data-remove-expense aria-label="删除费用">×</button>
+      </div>
+      <label class="field"><span>名称</span><input name="expenseTitle" maxlength="160" value="${attr(expense.title || item.title || '')}" /></label>
+      <div class="field-grid">
+        <label class="field"><span>金额</span><input name="expenseAmount" type="number" min="0" step="0.01" value="${attr(expense.amount ?? '')}" /></label>
+        <label class="field"><span>分类</span>
+          <select name="expenseCategory">
+            ${['交通','住宿','餐饮','门票','购物','其他'].map(value => `<option value="${value}" ${category === value ? 'selected' : ''}>${value}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      <label class="check-field"><input name="expensePaid" type="checkbox" ${expense.paid ? 'checked' : ''} /><span>已支付</span></label>
+      <label class="field"><span>备注</span><textarea name="expenseNotes" maxlength="2000">${escapeHtml(expense.notes || '')}</textarea></label>
+    </div>
+  `;
+}
+
+function existingExpenseManagerHtml(item, expenses = []) {
+  return `
+    <div class="stack compact-expense-manager" data-expense-manager>
+      <div class="compact-expense-list" data-expense-list>
+        ${expenses.length ? expenses.map((expense, index) => existingExpenseRowHtml(expense, index, item)).join('') : '<div class="reference-editor-empty" data-expense-empty>还没有费用</div>'}
+      </div>
+      <button class="button ghost small" type="button" data-add-expense-row>＋ 添加一笔</button>
+      <button class="button primary full" type="submit">保存费用</button>
+    </div>
+  `;
+}
+
+function bindExistingExpenseManager(root, item) {
+  const list = root.querySelector('[data-expense-list]');
+  const rows = () => [...root.querySelectorAll('[data-expense-row]')];
+
+  const sync = () => {
+    const empty = list.querySelector('[data-expense-empty]');
+    if (!rows().length && !empty) list.innerHTML = '<div class="reference-editor-empty" data-expense-empty>还没有费用</div>';
+    if (rows().length && empty) empty.remove();
+    rows().forEach((row, index) => {
+      const title = row.querySelector('.compact-expense-head strong');
+      if (title) title.textContent = `费用 ${index + 1}`;
+    });
+  };
+
+  root.addEventListener('click', event => {
+    const remove = event.target.closest('[data-remove-expense]');
+    if (remove) {
+      remove.closest('[data-expense-row]')?.remove();
+      root.dataset.dirty = '1';
+      sync();
+      return;
+    }
+    if (event.target.closest('[data-add-expense-row]')) {
+      list.querySelector('[data-expense-empty]')?.remove();
+      list.insertAdjacentHTML('beforeend', existingExpenseRowHtml({}, rows().length, item));
+      root.dataset.dirty = '1';
+      sync();
+    }
+  });
+  sync();
+}
+
+async function saveExistingItemExpenses(root, item) {
+  const original = itemExpenses(item);
+  const originalIds = new Set(original.map(expense => String(expense.id)));
+  const keptIds = new Set();
+  const day = state.current.days.find(value => value.items.some(entry => String(entry.id) === String(item.id)));
+  const expenseDate = day?.day_date || '';
+
+  for (const row of root.querySelectorAll('[data-expense-row]')) {
+    const id = String(row.dataset.expenseId || '');
+    const amount = Number(row.querySelector('[name="expenseAmount"]')?.value || 0);
+    const title = String(row.querySelector('[name="expenseTitle"]')?.value || '').trim() || item.title;
+    if (!(amount > 0)) continue;
+
+    const payload = {
+      title,
+      amount,
+      category: row.querySelector('[name="expenseCategory"]')?.value || expenseCategoryForItem(item),
+      expenseDate,
+      itemId: item.id,
+      paid: Boolean(row.querySelector('[name="expensePaid"]')?.checked),
+      notes: row.querySelector('[name="expenseNotes"]')?.value || ''
+    };
+
+    if (id) {
+      keptIds.add(id);
+      await api(`/api/expenses/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      await api(`/api/trips/${state.current.trip.id}/expenses`, { method: 'POST', body: JSON.stringify(payload) });
+    }
+  }
+
+  for (const id of originalIds) {
+    if (!keptIds.has(id)) await api(`/api/expenses/${id}`, { method: 'DELETE' });
+  }
+
+  state.current = await api(`/api/trips/${state.current.trip.id}`);
+  return itemExpenses(item);
+}
+
 function compactItemFormHtml(item = {}, currentDayId = state.currentDayId) {
   const itemType = itemEditorTypeFor(item);
   const typeMeta = ITEM_EDITOR_TYPES[itemType];
@@ -520,6 +641,7 @@ function compactItemFormHtml(item = {}, currentDayId = state.currentDayId) {
   const notes = item.notes || '';
   const details = item.details || {};
   const hasLocation = Boolean(item.location_name || item.location || hasItemCoordinates(item));
+  const existingExpenses = item.id ? itemExpenses(item) : [];
 
   return `
     <div class="stack item-editor-main">
@@ -601,10 +723,10 @@ function compactItemFormHtml(item = {}, currentDayId = state.currentDayId) {
           id: 'expense',
           icon: '¥',
           title: '费用',
-          summary: '未添加费用',
-          active: false,
-          action: '添加',
-          hidden: Boolean(item.id)
+          summary: item.id ? itemExpenseSummary(item, existingExpenses) : '未添加费用',
+          active: item.id ? existingExpenses.length > 0 : false,
+          action: item.id ? (existingExpenses.length ? '管理' : '添加') : '添加',
+          hidden: false
         })}
       </div>
 
@@ -811,6 +933,23 @@ function bindCompactItemEditor(mainForm, item) {
       }
 
       if (id === 'expense') {
+        if (item.id) {
+          const currentExpenses = itemExpenses(item);
+          const subForm = openItemSubsheet('¥ 费用', existingExpenseManagerHtml(item, currentExpenses), async (_data, form) => {
+            const saved = await saveExistingItemExpenses(form, item);
+            updateCompactItemAddon(
+              mainForm,
+              'expense',
+              itemExpenseSummary(item, saved),
+              saved.length > 0,
+              saved.length ? '管理' : '添加'
+            );
+            closeItemSubsheet(true);
+          });
+          bindExistingExpenseManager(subForm, item);
+          return;
+        }
+
         const current = safeJsonParse(mainForm.querySelector('[name="initialExpenseJson"]').value, {});
         const currency = state.current?.trip?.currency || 'CNY';
         const subForm = openItemSubsheet('¥ 费用', `
