@@ -1,4 +1,5 @@
-const CACHE = 'travel-shell-v3';
+const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
+const CACHE = `travel-shell-${VERSION}`;
 const SHELL = [
   '/',
   '/app.css',

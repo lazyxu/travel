@@ -546,36 +546,51 @@ function registerPwa() {
   if (!('serviceWorker' in navigator)) return;
 
   window.addEventListener('load', async () => {
-    try {
-      let commit = 'dev';
-      try {
-        const response = await fetch('/api/version', { cache: 'no-store' });
-        if (response.ok) commit = (await response.json()).commit || 'dev';
-      } catch {}
+    let knownCommit = '';
+    let reloading = false;
 
-      const registration = await navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(commit)}`);
-      let reloading = false;
+    const fetchCommit = async () => {
+      const response = await fetch('/api/version', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return String((await response.json()).commit || 'dev');
+    };
 
-      const showUpdate = worker => {
-        const banner = document.querySelector('#pwa-update');
-        const button = document.querySelector('#pwa-update-button');
-        if (!banner || !button || !worker || !navigator.serviceWorker.controller) return;
-        banner.classList.remove('hidden');
-        button.onclick = () => {
-          button.disabled = true;
-          button.textContent = '刷新中…';
-          worker.postMessage({ type: 'SKIP_WAITING' });
-        };
+    const showUpdate = worker => {
+      const banner = document.querySelector('#pwa-update');
+      const button = document.querySelector('#pwa-update-button');
+      if (!banner || !button || !worker || !navigator.serviceWorker.controller) return;
+      banner.classList.remove('hidden');
+      button.disabled = false;
+      button.textContent = '立即刷新';
+      button.onclick = () => {
+        button.disabled = true;
+        button.textContent = '刷新中…';
+        worker.postMessage({ type: 'SKIP_WAITING' });
       };
+    };
 
+    const bindRegistration = registration => {
       if (registration.waiting) showUpdate(registration.waiting);
-
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing;
         worker?.addEventListener('statechange', () => {
           if (worker.state === 'installed' && navigator.serviceWorker.controller) showUpdate(worker);
         });
       });
+    };
+
+    const registerCommit = async commit => {
+      const registration = await navigator.serviceWorker.register(
+        `/sw.js?v=${encodeURIComponent(commit)}`,
+        { scope: '/' }
+      );
+      bindRegistration(registration);
+      return registration;
+    };
+
+    try {
+      knownCommit = await fetchCommit();
+      await registerCommit(knownCommit);
 
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (reloading) return;
@@ -583,7 +598,15 @@ function registerPwa() {
         window.location.reload();
       });
 
-      setInterval(() => registration.update().catch(() => {}), 30 * 60 * 1000);
+      setInterval(async () => {
+        try {
+          const latestCommit = await fetchCommit();
+          if (latestCommit && latestCommit !== knownCommit) {
+            knownCommit = latestCommit;
+            await registerCommit(latestCommit);
+          }
+        } catch {}
+      }, 15 * 60 * 1000);
     } catch {}
   }, { once: true });
 }
