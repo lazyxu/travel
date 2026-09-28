@@ -24,7 +24,7 @@ import {
   validDate
 } from './lib.js';
 import { resolveReferenceMetadata } from './link-preview.js';
-import { searchBaiduPoi } from './baidu.js';
+import { resolveBaiduMapLink, searchBaiduPoi } from './baidu.js';
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
@@ -122,7 +122,7 @@ async function getTripAggregate(id) {
       [id]
     ),
     pool.query(
-      `SELECT i.id, i.day_id, i.item_time, i.category, i.title, i.location, i.notes,
+      `SELECT i.id, i.day_id, i.item_time, i.category, i.title, i.location_name, i.location, i.notes,
               i.xhs_url, i.dianping_url, i.links, i.image_urls,
               i.start_time, i.end_time, i.latitude, i.longitude, i.coord_type,
               i.details, i.position, i.created_at, i.updated_at
@@ -212,6 +212,16 @@ app.get('/api/baidu/poi/search', async (req, res) => {
     throw httpError(502, `百度地图搜索失败：${error.message}`, {
       baiduStatus: error.baiduStatus ?? null
     });
+  }
+});
+
+app.post('/api/baidu/parse-link', async (req, res) => {
+  const value = requiredText(req.body?.value, '百度地图链接', 3000);
+  const region = cleanText(req.body?.region, 80);
+  try {
+    res.json(await resolveBaiduMapLink({ value, region, ak: baiduMapAk }));
+  } catch (error) {
+    throw httpError(400, `百度地图链接解析失败：${error.message}`);
   }
 });
 
@@ -328,6 +338,7 @@ app.post('/api/days/:dayId/items', async (req, res) => {
   const title = requiredText(req.body?.title, '行程标题', 160);
   const category = categories.has(req.body?.category) ? req.body.category : '其他';
   const { startTime, endTime } = normalizeTimeRange(req.body?.startTime ?? req.body?.itemTime, req.body?.endTime);
+  const locationName = cleanText(req.body?.locationName, 160);
   const location = cleanText(req.body?.location, 240);
   const latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
   const longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
@@ -341,14 +352,14 @@ app.post('/api/days/:dayId/items', async (req, res) => {
 
   const result = await pool.query(
     `INSERT INTO itinerary_items (
-       day_id, item_time, start_time, end_time, category, title, location,
+       day_id, item_time, start_time, end_time, category, title, location_name, location,
        latitude, longitude, coord_type, notes, links, image_urls, details, position
      )
-     SELECT $1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+     SELECT $1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
             COALESCE((SELECT MAX(position) + 1 FROM itinerary_items WHERE day_id = $1), 0)
      WHERE EXISTS (SELECT 1 FROM trip_days WHERE id = $1)
      RETURNING *`,
-    [dayId, startTime, endTime, category, title, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
+    [dayId, startTime, endTime, category, title, locationName, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
   );
   if (!result.rowCount) throw httpError(404, '日期不存在');
   res.status(201).json(result.rows[0]);
@@ -359,6 +370,7 @@ app.put('/api/items/:id', async (req, res) => {
   const title = requiredText(req.body?.title, '行程标题', 160);
   const category = categories.has(req.body?.category) ? req.body.category : '其他';
   const { startTime, endTime } = normalizeTimeRange(req.body?.startTime ?? req.body?.itemTime, req.body?.endTime);
+  const locationName = cleanText(req.body?.locationName, 160);
   const location = cleanText(req.body?.location, 240);
   const latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
   const longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
@@ -373,10 +385,10 @@ app.put('/api/items/:id', async (req, res) => {
   const result = await pool.query(
     `UPDATE itinerary_items
         SET item_time = $2, start_time = $2, end_time = $3, category = $4, title = $5,
-            location = $6, latitude = $7, longitude = $8, coord_type = $9, notes = $10,
-            links = $11, image_urls = $12, details = $13, updated_at = now()
+            location_name = $6, location = $7, latitude = $8, longitude = $9, coord_type = $10, notes = $11,
+            links = $12, image_urls = $13, details = $14, updated_at = now()
       WHERE id = $1 RETURNING *`,
-    [id, startTime, endTime, category, title, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
+    [id, startTime, endTime, category, title, locationName, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
   );
   if (!result.rowCount) throw httpError(404, '行程项不存在');
   res.json(result.rows[0]);

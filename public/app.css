@@ -432,3 +432,15 @@ button { color: inherit; }
   .bottom-nav { padding-inline: 8px; }
   .structured-grid { grid-template-columns: 1fr; }
 }
+
+.location-address { margin-top: 3px; padding-left: 20px; color: #999d97; font-size: 11px; line-height: 1.4; }
+.baidu-link-box { padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: #fafbf8; }
+.baidu-link-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.baidu-link-head strong { font-size: 13px; }
+.baidu-link-head span { color: var(--muted); font-size: 10px; }
+.baidu-link-row { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
+.baidu-link-row input { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 10px 11px; background: #fff; }
+.location-map-action { margin-top: 8px; min-height: 26px; display: flex; align-items: center; }
+.location-map-action > span { color: var(--muted); font-size: 11px; }
+.drag-handle { -webkit-user-select: none; -webkit-touch-callout: none; }
+.sorting-itinerary { overscroll-behavior: contain; -webkit-user-select: none; }

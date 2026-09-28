@@ -76,6 +76,7 @@ try {
       endTime: '10:00',
       category: '景点',
       title: 'First',
+      locationName: '西湖',
       location: 'West Lake',
       latitude: 30.25,
       longitude: 120.15,
@@ -134,6 +135,7 @@ try {
   assert.deepEqual(currentDay2.items.map(item => item.title), ['First']);
   assert.equal(currentDay2.route_mode, 'walking');
   assert.equal(currentDay2.items[0].details.kind, 'flight');
+  assert.equal(currentDay2.items[0].location_name, '西湖');
   assert.equal(aggregate.trip.currency, 'CNY');
   assert.equal(Number(aggregate.trip.budget_total), 12000);
 
@@ -166,6 +168,16 @@ try {
       notes: ''
     })
   });
+
+  const parsedMap = await json('/api/baidu/parse-link', {
+    method: 'POST',
+    body: JSON.stringify({
+      value: 'https://api.map.baidu.com/marker?location=30.25,120.15&title=%E8%A5%BF%E6%B9%96&content=%E6%9D%AD%E5%B7%9E&coord_type=bd09ll&output=html&src=test',
+      region: '杭州'
+    })
+  });
+  assert.deepEqual(parsedMap.location, { lat: 30.25, lng: 120.15 });
+  assert.equal(parsedMap.name, '西湖');
 
   const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
   const uploadResponse = await fetch(`${base}/api/uploads/images`, {

@@ -226,6 +226,7 @@ function itemCardHtml(item) {
   const images = Array.isArray(item.image_urls) ? item.image_urls : [];
   const links = Array.isArray(item.links) ? item.links : [];
   const mapUrl = baiduPointUrl(item);
+  const displayLocation = itemLocationLabel(item);
   return `
     <article class="timeline-card" data-item-id="${attr(item.id)}">
       <div class="timeline-time ${(item.start_time || item.item_time) ? '' : 'muted'}">${escapeHtml(formatItemTime(item))}</div>
@@ -239,8 +240,8 @@ function itemCardHtml(item) {
         </div>
         <h3>${escapeHtml(item.title)}</h3>
         ${structuredDetailsHtml(item)}
-        ${item.location ? `<div class="location">📍 ${escapeHtml(item.location)}</div>` : ''}
-        ${(item.latitude !== null && item.longitude !== null) ? `<div class="geo-meta">${escapeHtml(String(item.latitude))}, ${escapeHtml(String(item.longitude))} · ${escapeHtml((item.coord_type || 'bd09ll').toUpperCase())}</div>` : ''}
+        ${displayLocation ? `<div class="location">📍 ${escapeHtml(displayLocation)}</div>` : ''}
+        ${item.location_name && item.location && item.location_name !== item.location ? `<div class="location-address">${escapeHtml(item.location)}</div>` : ''}
         ${mapUrl ? `<div class="map-row"><a class="map-link" href="${attr(mapUrl)}" target="_blank" rel="noopener noreferrer">百度地图打开 ↗</a></div>` : ''}
         ${images.length ? `
           <div class="item-gallery item-gallery-${Math.min(images.length, 3)}">
@@ -321,7 +322,7 @@ function renderToday() {
       ${next ? `
         <div class="next-time">${escapeHtml(formatItemTime(next))}</div>
         <strong>${escapeHtml(next.title)}</strong>
-        ${next.location ? `<span>📍 ${escapeHtml(next.location)}</span>` : ''}
+        ${itemLocationLabel(next) ? `<span>📍 ${escapeHtml(itemLocationLabel(next))}</span>` : ''}
         ${baiduPointUrl(next) ? `<a href="${attr(baiduPointUrl(next))}" target="_blank" rel="noopener noreferrer">百度地图打开 ↗</a>` : ''}
       ` : '<strong>今天没有后续定时行程</strong>'}
     </section>
@@ -523,6 +524,8 @@ function bindItinerarySorting(day) {
     handle.addEventListener('pointerdown', event => {
       if (event.button !== undefined && event.button !== 0) return;
       event.preventDefault();
+      try { handle.setPointerCapture?.(event.pointerId); } catch {}
+      navigator.vibrate?.(12);
 
       const card = handle.closest('[data-item-id]');
       if (!card) return;
@@ -545,6 +548,9 @@ function bindItinerarySorting(day) {
       const onMove = moveEvent => {
         if (moveEvent.pointerId !== event.pointerId) return;
         moveEvent.preventDefault();
+        const edge = 86;
+        if (moveEvent.clientY < edge) window.scrollBy({ top: -14, behavior: 'auto' });
+        else if (moveEvent.clientY > window.innerHeight - edge) window.scrollBy({ top: 14, behavior: 'auto' });
         const stack = document.elementsFromPoint(moveEvent.clientX, moveEvent.clientY);
         if (stack.some(updateDayTarget)) return;
 
@@ -562,6 +568,7 @@ function bindItinerarySorting(day) {
         window.removeEventListener('pointermove', onMove, { capture: true });
         window.removeEventListener('pointerup', finish, { capture: true });
         window.removeEventListener('pointercancel', finish, { capture: true });
+        try { handle.releasePointerCapture?.(event.pointerId); } catch {}
         card.classList.remove('sorting-card');
         document.body.classList.remove('sorting-itinerary');
         targets.remove();

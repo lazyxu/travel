@@ -267,34 +267,41 @@ function routeModeMeta(mode) {
   return ROUTE_MODE_META[mode] || ROUTE_MODE_META.driving;
 }
 
+function hasItemCoordinates(item) {
+  if (item?.latitude === null || item?.latitude === undefined || item?.longitude === null || item?.longitude === undefined) return false;
+  if (String(item.latitude).trim() === '' || String(item.longitude).trim() === '') return false;
+  const lat = Number(item.latitude);
+  const lng = Number(item.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
+function itemLocationLabel(item) {
+  return item?.location_name || item?.location || '';
+}
+
 function baiduPointUrl(item) {
+  if (!hasItemCoordinates(item)) return '';
   const src = 'webapp.lazyxu.travel';
-  if (Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude))) {
-    const params = new URLSearchParams({
-      location: `${item.latitude},${item.longitude}`,
-      title: item.title || item.location || '行程地点',
-      content: item.location || item.title || '行程地点',
-      coord_type: item.coord_type || 'bd09ll',
-      output: 'html',
-      src
-    });
-    return `https://api.map.baidu.com/marker?${params.toString()}`;
-  }
-  if (item?.location) {
-    const params = new URLSearchParams({ address: item.location, output: 'html', src });
-    return `https://api.map.baidu.com/geocoder?${params.toString()}`;
-  }
-  return '';
+  const label = itemLocationLabel(item) || item.title || '行程地点';
+  const params = new URLSearchParams({
+    location: `${item.latitude},${item.longitude}`,
+    title: label,
+    content: item.location || label,
+    coord_type: item.coord_type || 'bd09ll',
+    output: 'html',
+    src
+  });
+  return `https://api.map.baidu.com/marker?${params.toString()}`;
 }
 
 function baiduDayRouteUrl(day) {
   const points = (day?.items || [])
-    .filter(item => Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude)))
+    .filter(hasItemCoordinates)
     .slice(0, 17);
   if (points.length < 2) return '';
   const coordType = points[0].coord_type || 'bd09ll';
   if (points.some(point => (point.coord_type || 'bd09ll') !== coordType)) return '';
-  const pointValue = point => `latlng:${point.latitude},${point.longitude}|name:${point.title || point.location || '行程点'}`;
+  const pointValue = point => `latlng:${point.latitude},${point.longitude}|name:${itemLocationLabel(point) || point.title || '行程点'}`;
   const params = new URLSearchParams({
     origin: pointValue(points[0]),
     destination: pointValue(points[points.length - 1]),

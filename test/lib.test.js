@@ -14,7 +14,7 @@ import {
   optionalUrl
 } from '../src/lib.js';
 import { detectPlatform, extractHtmlTitle, isPrivateAddress } from '../src/link-preview.js';
-import { normalizeBaiduPoiPayload } from '../src/baidu.js';
+import { normalizeBaiduPoiPayload, parseBaiduMapLink } from '../src/baidu.js';
 
 test('enumerateDates includes both ends', () => {
   assert.deepEqual(enumerateDates('2026-10-01', '2026-10-03'), ['2026-10-01', '2026-10-02', '2026-10-03']);
@@ -116,4 +116,18 @@ test('structured itinerary details are sanitized', () => {
     }
   );
   assert.throws(() => normalizeItemDetails({ kind: 'spaceship' }));
+});
+
+
+test('Baidu map URI parsing extracts location and readable fields', () => {
+  const web = parseBaiduMapLink('https://api.map.baidu.com/marker?location=30.25,120.15&title=%E8%A5%BF%E6%B9%96&content=%E6%9D%AD%E5%B7%9E&coord_type=bd09ll&output=html&src=x');
+  assert.deepEqual(web.location, { lat: 30.25, lng: 120.15 });
+  assert.equal(web.name, '西湖');
+  const app = parseBaiduMapLink('baidumap://map/marker?location=39.9,116.4&title=%E5%A4%A9%E5%AE%89%E9%97%A8&content=%E5%8C%97%E4%BA%AC&coord_type=gcj02');
+  assert.equal(app.address, '北京');
+  assert.equal(app.coordType, 'gcj02');
+});
+
+test('Baidu map parser rejects unrelated domains', () => {
+  assert.equal(parseBaiduMapLink('https://example.com/?location=30,120'), null);
 });

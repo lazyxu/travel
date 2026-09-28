@@ -51,6 +51,7 @@ export async function migrate() {
         end_time VARCHAR(5) NOT NULL DEFAULT '',
         category VARCHAR(20) NOT NULL DEFAULT '其他',
         title TEXT NOT NULL,
+        location_name TEXT NOT NULL DEFAULT '',
         location TEXT NOT NULL DEFAULT '',
         latitude DOUBLE PRECISION,
         longitude DOUBLE PRECISION,
@@ -66,6 +67,7 @@ export async function migrate() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
 
+      ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS location_name TEXT NOT NULL DEFAULT '';
       ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS image_urls TEXT[] NOT NULL DEFAULT '{}';
       ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS start_time VARCHAR(5) NOT NULL DEFAULT '';
       ALTER TABLE itinerary_items ADD COLUMN IF NOT EXISTS end_time VARCHAR(5) NOT NULL DEFAULT '';

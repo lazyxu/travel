@@ -259,7 +259,7 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
       <label class="field"><span>行程标题 *</span><input name="title" required maxlength="160" value="${attr(item.title || '')}" placeholder="例如：清水寺" /></label>
       ${itemDetailsFieldsHtml(item)}
       <div class="poi-search-box">
-        <div class="poi-search-head"><strong>搜索百度地点</strong><span>选择后自动填写地址和 BD-09 坐标</span></div>
+        <div class="poi-search-head"><strong>搜索百度地点</strong><span>选择后自动定位</span></div>
         <div class="poi-search-row">
           <input name="poiQuery" maxlength="45" placeholder="输入景点、餐厅、酒店等" />
           <input name="poiRegion" maxlength="50" value="${attr(state.current?.trip?.destination || '')}" placeholder="城市，如：杭州" />
@@ -267,26 +267,21 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
         </div>
         <div class="poi-results hidden" data-poi-results></div>
       </div>
-      <label class="field"><span>地点 / 地址</span><input name="location" maxlength="240" value="${attr(item.location || '')}" placeholder="例如：京都市东山区清水1丁目294" /></label>
-      <details class="advanced-details">
-        <summary>高级位置设置</summary>
-        <div class="geo-box">
-          <div class="geo-head"><strong>坐标</strong><span>POI 选择后自动填写，一般无需修改</span></div>
-          <div class="field-grid">
-            <label class="field"><span>纬度 Latitude</span><input name="latitude" type="number" step="any" min="-90" max="90" value="${attr(item.latitude ?? '')}" placeholder="30.274084" /></label>
-            <label class="field"><span>经度 Longitude</span><input name="longitude" type="number" step="any" min="-180" max="180" value="${attr(item.longitude ?? '')}" placeholder="120.15507" /></label>
-          </div>
-          <label class="field"><span>坐标类型</span>
-            <select name="coordType">
-              ${[
-                ['bd09ll', 'BD-09 百度坐标'],
-                ['gcj02', 'GCJ-02 高德/腾讯坐标'],
-                ['wgs84', 'WGS84 GPS 坐标']
-              ].map(([value, label]) => `<option value="${value}" ${(item.coord_type || 'bd09ll') === value ? 'selected' : ''}>${label}</option>`).join('')}
-            </select>
-          </label>
+      <label class="field"><span>地点名称</span><input name="locationName" maxlength="160" value="${attr(item.location_name || '')}" placeholder="例如：灵隐寺、西湖全季酒店" /></label>
+      <label class="field"><span>地址</span><input name="location" maxlength="240" value="${attr(item.location || '')}" placeholder="例如：杭州市西湖区法云弄1号" /></label>
+      <div class="baidu-link-box">
+        <div class="baidu-link-head"><strong>百度地图链接</strong><span>可直接粘贴百度分享链接</span></div>
+        <div class="baidu-link-row">
+          <input name="baiduMapLink" inputmode="url" placeholder="粘贴百度地图分享链接或 baidumap:// 链接" />
+          <button id="baidu-link-parse" class="button ghost small" type="button">解析</button>
         </div>
-      </details>
+        <div class="location-map-action" data-location-map-action>
+          ${baiduPointUrl(item) ? `<a class="map-link" href="${attr(baiduPointUrl(item))}" target="_blank" rel="noopener noreferrer">在百度地图打开 ↗</a>` : '<span>尚未定位；可搜索地点或粘贴百度地图链接</span>'}
+        </div>
+      </div>
+      <input name="latitude" type="hidden" value="${attr(item.latitude ?? '')}" />
+      <input name="longitude" type="hidden" value="${attr(item.longitude ?? '')}" />
+      <input name="coordType" type="hidden" value="${attr(item.coord_type || 'bd09ll')}" />
       <label class="field"><span>备注</span><textarea name="notes" maxlength="5000" placeholder="预约信息、交通方式、必点菜等">${escapeHtml(item.notes || '')}</textarea></label>
       <label class="field"><span>参考入口</span><textarea name="references" class="link-url-input" maxlength="30000" placeholder="支持微信小程序、抖音、美团、大众点评、小红书、闲鱼和普通网页；每行一个">${escapeHtml(links.join('\n'))}</textarea></label>
       <p class="form-help">最多 12 个。网页会自动识别平台并尝试提取标题；微信小程序可粘贴 #小程序://... 口令，保存后可一键复制。</p>
@@ -318,6 +313,7 @@ function openItemForm(day, item = null) {
       endTime: form.get('endTime'),
       category: form.get('category'),
       title: form.get('title'),
+      locationName: form.get('locationName'),
       location: form.get('location'),
       latitude: form.get('latitude'),
       longitude: form.get('longitude'),
@@ -360,6 +356,69 @@ function openItemForm(day, item = null) {
   };
   detailsKindSelect?.addEventListener('change', updateDetailsKind);
 
+  const locationNameInput = el.sheetForm.querySelector('[name="locationName"]');
+  const locationInput = el.sheetForm.querySelector('[name="location"]');
+  const latInput = el.sheetForm.querySelector('[name="latitude"]');
+  const lngInput = el.sheetForm.querySelector('[name="longitude"]');
+  const coordInput = el.sheetForm.querySelector('[name="coordType"]');
+  const locationMapAction = el.sheetForm.querySelector('[data-location-map-action]');
+  const baiduLinkInput = el.sheetForm.querySelector('[name="baiduMapLink"]');
+  const baiduLinkParseButton = el.sheetForm.querySelector('#baidu-link-parse');
+
+  const updateLocationMapAction = () => {
+    if (!locationMapAction) return;
+    const temp = {
+      title: el.sheetForm.querySelector('[name="title"]')?.value || '',
+      location_name: locationNameInput?.value || '',
+      location: locationInput?.value || '',
+      latitude: latInput?.value || '',
+      longitude: lngInput?.value || '',
+      coord_type: coordInput?.value || 'bd09ll'
+    };
+    const url = baiduPointUrl(temp);
+    locationMapAction.innerHTML = url
+      ? `<a class="map-link" href="${attr(url)}" target="_blank" rel="noopener noreferrer">在百度地图打开 ↗</a>`
+      : '<span>尚未定位；可搜索地点或粘贴百度地图链接</span>';
+  };
+
+  const parseBaiduLink = async () => {
+    const value = baiduLinkInput?.value?.trim();
+    if (!value) return showToast('请先粘贴百度地图链接', 'error');
+    const region = el.sheetForm.querySelector('[name="poiRegion"]')?.value?.trim() || state.current?.trip?.destination || '';
+    baiduLinkParseButton.disabled = true;
+    baiduLinkParseButton.textContent = '解析中…';
+    try {
+      const parsed = await api('/api/baidu/parse-link', {
+        method: 'POST',
+        body: JSON.stringify({ value, region })
+      });
+      if (parsed.name && locationNameInput) locationNameInput.value = parsed.name;
+      if (parsed.address && locationInput) locationInput.value = parsed.address;
+      if (parsed.location) {
+        if (latInput) latInput.value = parsed.location.lat;
+        if (lngInput) lngInput.value = parsed.location.lng;
+        if (coordInput) coordInput.value = parsed.coordType || 'bd09ll';
+        updateLocationMapAction();
+        showToast('百度地图位置已解析');
+      } else {
+        updateLocationMapAction();
+        showToast('已识别地点，但链接没有可用坐标；请用地点搜索确认定位', 'error');
+      }
+    } catch (error) {
+      showToast(error.message, 'error');
+    } finally {
+      baiduLinkParseButton.disabled = false;
+      baiduLinkParseButton.textContent = '解析';
+    }
+  };
+
+  baiduLinkParseButton?.addEventListener('click', parseBaiduLink);
+  baiduLinkInput?.addEventListener('paste', () => setTimeout(() => {
+    if (baiduLinkInput.value.trim()) parseBaiduLink();
+  }, 0));
+  locationNameInput?.addEventListener('input', updateLocationMapAction);
+  locationInput?.addEventListener('input', updateLocationMapAction);
+
   const poiSearchButton = el.sheetForm.querySelector('#poi-search-button');
   const poiResults = el.sheetForm.querySelector('[data-poi-results]');
   if (poiSearchButton && poiResults) {
@@ -388,17 +447,20 @@ function openItemForm(day, item = null) {
             const poi = results[Number(button.dataset.poiIndex)];
             if (!poi) return;
             const titleInput = el.sheetForm.querySelector('[name="title"]');
+            const locationNameInput = el.sheetForm.querySelector('[name="locationName"]');
             const locationInput = el.sheetForm.querySelector('[name="location"]');
             const latInput = el.sheetForm.querySelector('[name="latitude"]');
             const lngInput = el.sheetForm.querySelector('[name="longitude"]');
             const coordInput = el.sheetForm.querySelector('[name="coordType"]');
             if (titleInput && !titleInput.value.trim()) titleInput.value = poi.name || '';
+            if (locationNameInput) locationNameInput.value = poi.name || '';
             if (locationInput) locationInput.value = [poi.city, poi.district, poi.address || poi.name].filter(Boolean).join(' ');
             if (latInput) latInput.value = poi.location?.lat ?? '';
             if (lngInput) lngInput.value = poi.location?.lng ?? '';
             if (coordInput) coordInput.value = 'bd09ll';
+            updateLocationMapAction();
             poiResults.classList.add('hidden');
-            showToast('地点和坐标已填入');
+            showToast('地点已定位');
           });
         });
       } catch (error) {
