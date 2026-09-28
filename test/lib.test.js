@@ -13,7 +13,7 @@ import {
   normalizeUrlList,
   optionalUrl
 } from '../src/lib.js';
-import { detectPlatform, extractHtmlTitle, isPrivateAddress } from '../src/link-preview.js';
+import { detectPlatform, extractContentTitle, extractHtmlTitle, isPrivateAddress } from '../src/link-preview.js';
 import { normalizeBaiduPoiPayload, parseBaiduMapLink } from '../src/baidu.js';
 
 test('enumerateDates includes both ends', () => {
@@ -130,4 +130,26 @@ test('Baidu map URI parsing extracts location and readable fields', () => {
 
 test('Baidu map parser rejects unrelated domains', () => {
   assert.equal(parseBaiduMapLink('https://example.com/?location=30,120'), null);
+});
+
+
+test('reference titles support explicit display titles', () => {
+  const refs = normalizeReferences([
+    { value: 'https://www.xiaohongshu.com/explore/1', title: '我的攻略标题' },
+    '餐厅必点 | https://www.dianping.com/shop/1'
+  ]);
+  assert.equal(refs[0].customTitle, '我的攻略标题');
+  assert.equal(refs[1].customTitle, '餐厅必点');
+});
+
+
+test('content title extraction strips platform chrome', () => {
+  assert.equal(
+    extractContentTitle('<meta property="og:title" content="杭州周末路线 - 小红书">', 'xhs'),
+    '杭州周末路线'
+  );
+  assert.equal(
+    extractContentTitle('<script type="application/ld+json">{"headline":"西湖一日游攻略","name":"小红书"}</script>', 'xhs'),
+    '西湖一日游攻略'
+  );
 });

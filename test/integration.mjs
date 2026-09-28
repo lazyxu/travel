@@ -82,7 +82,7 @@ try {
       longitude: 120.15,
       coordType: 'bd09ll',
       notes: '',
-      references: [],
+      references: [{ value: 'https://example.com/reference', title: '自定义参考标题' }],
       imageUrls: [],
       details: {
         kind: 'flight',
@@ -136,6 +136,7 @@ try {
   assert.equal(currentDay2.route_mode, 'walking');
   assert.equal(currentDay2.items[0].details.kind, 'flight');
   assert.equal(currentDay2.items[0].location_name, '西湖');
+  assert.equal(currentDay2.items[0].links[0].title, '自定义参考标题');
   assert.equal(aggregate.trip.currency, 'CNY');
   assert.equal(Number(aggregate.trip.budget_total), 12000);
 

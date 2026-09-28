@@ -125,6 +125,7 @@ function itemDetailsFieldsHtml(item = {}) {
         <label class="field"><span>入住日期</span><input name="checkInDate" type="date" value="${attr(d.checkInDate || '')}" /></label>
         <label class="field"><span>入住时间</span><input name="checkInTime" type="time" value="${attr(d.checkInTime || '')}" /></label>
       </div>
+      <p class="form-help lodging-stay-help">设置跨天入住/退房后：入住当天晚上自动作为最后一站；住宿期间每天早晨自动作为第一站、夜间自动作为最后一站；退房当天早晨作为第一站。</p>
       <div class="field-grid">
         <label class="field"><span>退房日期</span><input name="checkOutDate" type="date" value="${attr(d.checkOutDate || '')}" /></label>
         <label class="field"><span>退房时间</span><input name="checkOutTime" type="time" value="${attr(d.checkOutTime || '')}" /></label>
@@ -283,8 +284,8 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
       <input name="longitude" type="hidden" value="${attr(item.longitude ?? '')}" />
       <input name="coordType" type="hidden" value="${attr(item.coord_type || 'bd09ll')}" />
       <label class="field"><span>备注</span><textarea name="notes" maxlength="5000" placeholder="预约信息、交通方式、必点菜等">${escapeHtml(item.notes || '')}</textarea></label>
-      <label class="field"><span>参考入口</span><textarea name="references" class="link-url-input" maxlength="30000" placeholder="支持微信小程序、抖音、美团、大众点评、小红书、闲鱼和普通网页；每行一个">${escapeHtml(links.join('\n'))}</textarea></label>
-      <p class="form-help">最多 12 个。网页会自动识别平台并尝试提取标题；微信小程序可粘贴 #小程序://... 口令，保存后可一键复制。</p>
+      <label class="field"><span>参考入口</span><textarea name="references" class="link-url-input" maxlength="30000" placeholder="每行一个。可写：自定义标题 | 链接\n也可只粘贴小红书、抖音、美团、点评、闲鱼、微信等链接">${escapeHtml(links.join('\n'))}</textarea></label>
+      <p class="form-help">最多 12 个。自定义标题优先展示；只粘贴链接时会尽量提取帖子、商品或门店本身的标题，而不是网站名称。</p>
       <div class="field">
         <span>行程图片</span>
         <div class="image-upload-row">

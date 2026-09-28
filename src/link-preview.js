@@ -45,6 +45,37 @@ function parseAttributes(tag) {
   return attrs;
 }
 
+function jsonLdCandidates(node, out = []) {
+  if (!node || out.length >= 24) return out;
+  if (Array.isArray(node)) {
+    for (const entry of node) jsonLdCandidates(entry, out);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  for (const key of ['headline', 'name']) {
+    if (typeof node[key] === 'string') {
+      const value = cleanTitle(node[key]);
+      if (value && !out.includes(value)) out.push(value);
+    }
+  }
+  for (const value of Object.values(node)) {
+    if (value && typeof value === 'object') jsonLdCandidates(value, out);
+  }
+  return out;
+}
+
+function extractJsonLdTitles(html) {
+  const titles = [];
+  const re = /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  for (const match of String(html || '').matchAll(re)) {
+    try {
+      jsonLdCandidates(JSON.parse(match[1]), titles);
+    } catch {}
+  }
+  return titles;
+}
+
 export function extractHtmlTitle(html) {
   const source = String(html || '');
   for (const tag of source.match(/<meta\b[^>]*>/gi) || []) {
@@ -71,6 +102,46 @@ export function detectPlatform(value) {
   if (/goofish\.com$|2\.taobao\.com$/.test(host)) return 'xianyu';
   if (/weixin\.qq\.com$|mp\.weixin\.qq\.com$/.test(host)) return 'wechat';
   return 'web';
+}
+
+function stripPlatformSuffix(title, platform) {
+  let result = cleanTitle(title);
+  const suffixes = {
+    xhs: ['小红书'],
+    douyin: ['抖音', 'Douyin'],
+    meituan: ['美团'],
+    dianping: ['大众点评'],
+    xianyu: ['闲鱼', '咸鱼'],
+    wechat: ['微信']
+  }[platform] || [];
+
+  for (const suffix of suffixes) {
+    result = result
+      .replace(new RegExp(`\\s*[-_｜|·—–:]\\s*${suffix}.*$`, 'i'), '')
+      .replace(new RegExp(`\\s*${suffix}\\s*$`, 'i'), '')
+      .trim();
+  }
+  return result.slice(0, 180);
+}
+
+export function extractContentTitle(html, platform = 'web') {
+  const source = String(html || '');
+  const jsonLd = extractJsonLdTitles(source)
+    .map(title => stripPlatformSuffix(title, platform))
+    .find(title => title && title !== PLATFORM_LABELS[platform]);
+  if (jsonLd) return jsonLd;
+
+  for (const tag of source.match(/<meta\b[^>]*>/gi) || []) {
+    const attrs = parseAttributes(tag);
+    const key = String(attrs.property || attrs.name || '').toLowerCase();
+    if (['og:title', 'twitter:title'].includes(key) && attrs.content) {
+      const title = stripPlatformSuffix(attrs.content, platform);
+      if (title && title !== PLATFORM_LABELS[platform]) return title;
+    }
+  }
+
+  const match = source.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+  return match ? stripPlatformSuffix(match[1], platform) : '';
 }
 
 export function isPrivateAddress(address) {
@@ -171,11 +242,13 @@ export async function resolveReferenceMetadata(refs) {
   return Promise.all(refs.map(async ref => {
     const value = ref.value || ref.url || '';
     const platform = detectPlatform(value);
+    const customTitle = cleanTitle(ref.customTitle || ref.title || '');
+
     if (ref.kind === 'copy') {
-      return { kind: 'copy', platform, value, title: PLATFORM_LABELS[platform] || '参考入口' };
+      return { kind: 'copy', platform, value, title: customTitle || PLATFORM_LABELS[platform] || '参考入口', customTitle };
     }
     if (ref.kind === 'uri') {
-      return { kind: 'uri', platform, value, url: ref.url || value, title: PLATFORM_LABELS[platform] || '参考入口' };
+      return { kind: 'uri', platform, value, url: ref.url || value, title: customTitle || PLATFORM_LABELS[platform] || '参考入口', customTitle };
     }
 
     try {
@@ -186,10 +259,11 @@ export async function resolveReferenceMetadata(refs) {
         platform: finalPlatform,
         value: ref.url,
         url: ref.url,
-        title: extractHtmlTitle(html) || fallbackTitle(finalUrl, finalPlatform)
+        title: customTitle || extractContentTitle(html, finalPlatform) || fallbackTitle(finalUrl, finalPlatform),
+        customTitle
       };
     } catch {
-      return { kind: 'url', platform, value: ref.url, url: ref.url, title: fallbackTitle(ref.url, platform) };
+      return { kind: 'url', platform, value: ref.url, url: ref.url, title: customTitle || fallbackTitle(ref.url, platform), customTitle };
     }
   }));
 }

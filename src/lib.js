@@ -44,27 +44,41 @@ export function normalizeReferences(value, maxItems = 12) {
   const refs = [];
 
   for (const entry of source) {
-    const candidate = typeof entry === 'object' && entry !== null
-      ? (entry.value || entry.url || '')
-      : entry;
-    const raw = cleanText(candidate, 3000);
+    const isObject = typeof entry === 'object' && entry !== null;
+    let candidate = isObject ? (entry.value || entry.url || '') : entry;
+    let customTitle = isObject ? cleanText(entry.title || entry.customTitle, 180) : '';
+    let raw = cleanText(candidate, 3000);
     if (!raw) continue;
+
+    if (!isObject) {
+      const separator = raw.match(/\s[|｜]\s/);
+      if (separator) {
+        const index = separator.index;
+        customTitle = cleanText(raw.slice(0, index), 180);
+        raw = cleanText(raw.slice(index + separator[0].length), 3000);
+      }
+    }
 
     const httpMatch = raw.match(/https?:\/\/[^\s]+/i);
     let ref;
     if (httpMatch) {
       const url = optionalUrl(httpMatch[0].replace(/[),，。；;]+$/g, ''), '参考链接');
-      ref = { kind: 'url', url, value: url };
+      ref = { kind: 'url', url, value: url, customTitle };
     } else if (/^weixin:\/\//i.test(raw)) {
-      ref = { kind: 'uri', url: raw, value: raw };
+      ref = { kind: 'uri', url: raw, value: raw, customTitle };
     } else if (/(?:#)?小程序:\/\//i.test(raw)) {
-      ref = { kind: 'copy', value: raw };
+      ref = { kind: 'copy', value: raw, customTitle };
     } else {
       throw httpError(400, '参考入口仅支持网页链接、weixin:// 链接或微信小程序口令');
     }
 
     const key = `${ref.kind}:${ref.value}`;
-    if (!refs.some(item => `${item.kind}:${item.value}` === key)) refs.push(ref);
+    const existing = refs.find(item => `${item.kind}:${item.value}` === key);
+    if (existing) {
+      if (customTitle) existing.customTitle = customTitle;
+    } else {
+      refs.push(ref);
+    }
     if (refs.length > maxItems) throw httpError(400, `参考入口最多支持 ${maxItems} 个`);
   }
 
@@ -166,6 +180,15 @@ export function normalizeItemDetails(value) {
   for (const key of allowed[kind]) {
     const max = key.toLowerCase().includes('date') ? 10 : key.toLowerCase().includes('time') ? 5 : 160;
     result[key] = cleanText(source[key], max);
+  }
+  if (kind === 'lodging') {
+    if (result.checkInDate) result.checkInDate = validDate(result.checkInDate, '入住');
+    if (result.checkOutDate) result.checkOutDate = validDate(result.checkOutDate, '退房');
+    if (result.checkInDate && result.checkOutDate && result.checkOutDate < result.checkInDate) {
+      throw httpError(400, '退房日期不能早于入住日期');
+    }
+    if (result.checkInTime) result.checkInTime = normalizeTime(result.checkInTime);
+    if (result.checkOutTime) result.checkOutTime = normalizeTime(result.checkOutTime);
   }
   return result;
 }

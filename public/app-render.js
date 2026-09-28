@@ -114,12 +114,12 @@ function renderItinerary() {
               ${Object.entries(ROUTE_MODE_META).map(([value, meta]) => `<option value="${value}" ${(day.route_mode || 'driving') === value ? 'selected' : ''}>${meta.icon} ${meta.label}</option>`).join('')}
             </select>
           </label>
-          ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}" target="_blank" rel="noopener noreferrer">🗺 地图路线</a>` : ''}
+          ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}" >🗺 百度地图 App 路线</a>` : ''}
           <button id="edit-day" class="button ghost small" type="button">编辑当天</button>
         </div>
       </div>
       <div class="timeline">
-        ${day.items.length ? day.items.map(item => itemCardHtml(item)).join('') : `
+        ${dayDisplayItems(day).length ? dayDisplayItems(day).map(item => itemCardHtml(item)).join('') : `
           <div class="empty-state">
             <div class="empty-icon">＋</div>
             <strong>这一天还没有安排</strong>
@@ -163,7 +163,7 @@ function renderItinerary() {
     bindItinerarySorting(day);
     el.main.querySelectorAll('[data-edit-item]').forEach(button => {
       button.addEventListener('click', () => {
-        const item = day.items.find(x => String(x.id) === button.dataset.editItem);
+        const item = tripItemById(button.dataset.editItem);
         if (item) openItemForm(day, item);
       });
     });
@@ -221,7 +221,31 @@ function structuredDetailsHtml(item) {
   return '';
 }
 
+function hotelStayAnchorHtml(item) {
+  const mapUrl = baiduPointUrl(item);
+  const hotelName = item.details?.hotelName || itemLocationLabel(item) || item.title || '酒店';
+  const roleLabel = item._stayRole === 'morning' ? '从酒店出发' : '回酒店';
+  return `
+    <article class="timeline-card hotel-stay-anchor ${item._stayRole || ''}" data-virtual-stay="${attr(item._virtualKey || '')}">
+      <div class="timeline-time hotel-stay-time">${escapeHtml(item._stayTime || (item._stayRole === 'morning' ? '早晨' : '夜间'))}</div>
+      <div class="timeline-content">
+        <div class="timeline-top">
+          <span class="category"><span class="category-icon">🏨</span>${roleLabel}</span>
+          <div class="card-actions">
+            <button class="card-action" type="button" data-edit-item="${attr(item.id)}">编辑酒店</button>
+          </div>
+        </div>
+        <h3>${escapeHtml(hotelName)}</h3>
+        ${itemLocationLabel(item) && itemLocationLabel(item) !== hotelName ? `<div class="location">📍 ${escapeHtml(itemLocationLabel(item))}</div>` : ''}
+        ${item.location_name && item.location ? `<div class="location-address">${escapeHtml(item.location)}</div>` : ''}
+        ${mapUrl ? `<div class="map-row"><a class="map-link app-link" href="${attr(mapUrl)}">百度地图 App ↗</a></div>` : ''}
+      </div>
+    </article>
+  `;
+}
+
 function itemCardHtml(item) {
+  if (item?._virtualStay) return hotelStayAnchorHtml(item);
   const category = categoryMeta(item.category);
   const images = Array.isArray(item.image_urls) ? item.image_urls : [];
   const links = Array.isArray(item.links) ? item.links : [];
@@ -242,7 +266,7 @@ function itemCardHtml(item) {
         ${structuredDetailsHtml(item)}
         ${displayLocation ? `<div class="location">📍 ${escapeHtml(displayLocation)}</div>` : ''}
         ${item.location_name && item.location && item.location_name !== item.location ? `<div class="location-address">${escapeHtml(item.location)}</div>` : ''}
-        ${mapUrl ? `<div class="map-row"><a class="map-link" href="${attr(mapUrl)}" target="_blank" rel="noopener noreferrer">百度地图打开 ↗</a></div>` : ''}
+        ${mapUrl ? `<div class="map-row"><a class="map-link" href="${attr(mapUrl)}" >百度地图 App ↗</a></div>` : ''}
         ${images.length ? `
           <div class="item-gallery item-gallery-${Math.min(images.length, 3)}">
             ${images.slice(0, 6).map((url, index) => `
@@ -323,15 +347,15 @@ function renderToday() {
         <div class="next-time">${escapeHtml(formatItemTime(next))}</div>
         <strong>${escapeHtml(next.title)}</strong>
         ${itemLocationLabel(next) ? `<span>📍 ${escapeHtml(itemLocationLabel(next))}</span>` : ''}
-        ${baiduPointUrl(next) ? `<a href="${attr(baiduPointUrl(next))}" target="_blank" rel="noopener noreferrer">百度地图打开 ↗</a>` : ''}
+        ${baiduPointUrl(next) ? `<a href="${attr(baiduPointUrl(next))}" >百度地图 App ↗</a>` : ''}
       ` : '<strong>今天没有后续定时行程</strong>'}
     </section>
     <div class="section-head">
       <div><h2>今天全部安排</h2><div class="section-subtitle">${todayDay.items.length} 项</div></div>
-      ${baiduDayRouteUrl(todayDay) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(todayDay))}" target="_blank" rel="noopener noreferrer">🗺 当天路线</a>` : ''}
+      ${baiduDayRouteUrl(todayDay) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(todayDay))}" >🗺 百度地图 App 路线</a>` : ''}
     </div>
     <div class="timeline today-timeline">
-      ${todayDay.items.length ? todayDay.items.map(item => itemCardHtml(item)).join('') : '<div class="empty-state"><strong>今天没有安排</strong></div>'}
+      ${dayDisplayItems(todayDay).length ? dayDisplayItems(todayDay).map(item => itemCardHtml(item)).join('') : '<div class="empty-state"><strong>今天没有安排</strong></div>'}
     </div>
   `;
 
@@ -340,7 +364,7 @@ function renderToday() {
   el.main.querySelector('#today-open-day')?.addEventListener('click', () => navigate(`/trips/${trip.id}/day/${todayDay.id}`));
   el.main.querySelectorAll('[data-edit-item]').forEach(button => {
     button.addEventListener('click', () => {
-      const item = todayDay.items.find(x => String(x.id) === button.dataset.editItem);
+      const item = tripItemById(button.dataset.editItem);
       if (item) openItemForm(todayDay, item);
     });
   });
@@ -584,7 +608,9 @@ function bindItinerarySorting(day) {
             return;
           }
 
-          const itemIds = [...timeline.querySelectorAll('.timeline-card[data-item-id]')].map(node => node.dataset.itemId);
+          const visibleIds = [...timeline.querySelectorAll('.timeline-card[data-item-id]')].map(node => node.dataset.itemId);
+          const hiddenIds = day.items.map(item => String(item.id)).filter(id => !visibleIds.includes(id));
+          const itemIds = [...visibleIds, ...hiddenIds];
           await api(`/api/days/${day.id}/items/order`, {
             method: 'PUT',
             body: JSON.stringify({ itemIds })

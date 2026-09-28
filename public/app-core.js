@@ -213,10 +213,14 @@ function referencePlatformMeta(platform) {
 }
 
 function itemReferenceValues(item) {
-  const refs = Array.isArray(item?.links)
-    ? item.links.map(ref => ref?.value || ref?.url).filter(Boolean)
-    : [];
-  if (refs.length) return refs;
+  const refs = Array.isArray(item?.links) ? item.links : [];
+  if (refs.length) {
+    return refs.map(ref => {
+      const value = ref?.value || ref?.url || '';
+      const title = ref?.customTitle || ref?.title || '';
+      return title && value ? `${title} | ${value}` : value;
+    }).filter(Boolean);
+  }
   return [item?.xhs_url, item?.dianping_url].filter(Boolean);
 }
 
@@ -224,17 +228,26 @@ function extractReferenceInputs(value, maxItems = 12) {
   const text = String(value || '').trim();
   if (!text) return [];
   const refs = [];
+
   for (const line of text.split(/\r?\n/)) {
     const raw = line.trim();
     if (!raw) continue;
-    const urls = raw.match(/https?:\/\/[^\s]+/ig) || [];
+    let title = '';
+    let candidate = raw;
+    const separator = raw.match(/\s[|｜]\s/);
+    if (separator) {
+      title = raw.slice(0, separator.index).trim();
+      candidate = raw.slice(separator.index + separator[0].length).trim();
+    }
+
+    const urls = candidate.match(/https?:\/\/[^\s]+/ig) || [];
     if (urls.length) {
       for (const url of urls) {
         const cleaned = url.replace(/[),，。；;]+$/g, '');
-        if (!refs.includes(cleaned)) refs.push(cleaned);
+        if (!refs.some(ref => ref.value === cleaned)) refs.push({ value: cleaned, title });
       }
-    } else if (/^weixin:\/\//i.test(raw) || /(?:#)?小程序:\/\//i.test(raw)) {
-      if (!refs.includes(raw)) refs.push(raw);
+    } else if (/^weixin:\/\//i.test(candidate) || /(?:#)?小程序:\/\//i.test(candidate)) {
+      if (!refs.some(ref => ref.value === candidate)) refs.push({ value: candidate, title });
     }
     if (refs.length >= maxItems) break;
   }
@@ -279,44 +292,98 @@ function itemLocationLabel(item) {
   return item?.location_name || item?.location || '';
 }
 
+function baiduAppScheme() {
+  return /Android/i.test(navigator.userAgent) ? 'bdapp' : 'baidumap';
+}
+
 function baiduPointUrl(item) {
   if (!hasItemCoordinates(item)) return '';
-  const src = 'webapp.lazyxu.travel';
+  const scheme = baiduAppScheme();
   const label = itemLocationLabel(item) || item.title || '行程地点';
   const params = new URLSearchParams({
     location: `${item.latitude},${item.longitude}`,
     title: label,
     content: item.location || label,
     coord_type: item.coord_type || 'bd09ll',
-    output: 'html',
-    src
+    src: 'webapp.lazyxu.travel'
   });
-  return `https://api.map.baidu.com/marker?${params.toString()}`;
+  return `${scheme}://map/marker?${params.toString()}`;
+}
+
+function hotelStayRange(item) {
+  const d = item?.details || {};
+  if (d.kind !== 'lodging' || !/^\d{4}-\d{2}-\d{2}$/.test(d.checkInDate || '') || !/^\d{4}-\d{2}-\d{2}$/.test(d.checkOutDate || '')) return null;
+  if (d.checkOutDate <= d.checkInDate) return null;
+  return { checkInDate: d.checkInDate, checkOutDate: d.checkOutDate };
+}
+
+function tripItemById(id) {
+  for (const day of state.current?.days || []) {
+    const found = day.items?.find(item => String(item.id) === String(id));
+    if (found) return found;
+  }
+  return null;
+}
+
+function hotelStayAnchorsForDay(day) {
+  const date = String(day?.day_date || '').slice(0, 10);
+  const hotels = (state.current?.days || []).flatMap(sourceDay => sourceDay.items || []).filter(item => hotelStayRange(item));
+  const morning = [];
+  const night = [];
+
+  for (const hotel of hotels) {
+    const range = hotelStayRange(hotel);
+    const d = hotel.details || {};
+    if (date > range.checkInDate && date <= range.checkOutDate) {
+      morning.push({
+        ...hotel,
+        _virtualStay: true,
+        _stayRole: 'morning',
+        _virtualKey: `hotel-morning-${hotel.id}-${date}`,
+        _stayTime: date === range.checkOutDate ? (d.checkOutTime || '早晨') : '早晨'
+      });
+    }
+    if (date >= range.checkInDate && date < range.checkOutDate) {
+      night.push({
+        ...hotel,
+        _virtualStay: true,
+        _stayRole: 'night',
+        _virtualKey: `hotel-night-${hotel.id}-${date}`,
+        _stayTime: date === range.checkInDate ? (d.checkInTime || '夜间') : '夜间'
+      });
+    }
+  }
+  return { morning, night };
+}
+
+function dayDisplayItems(day) {
+  const anchors = hotelStayAnchorsForDay(day);
+  const regular = (day?.items || []).filter(item => !hotelStayRange(item));
+  return [...anchors.morning, ...regular, ...anchors.night];
 }
 
 function baiduDayRouteUrl(day) {
-  const points = (day?.items || [])
-    .filter(hasItemCoordinates)
-    .slice(0, 17);
+  const points = dayDisplayItems(day).filter(hasItemCoordinates).slice(0, 17);
   if (points.length < 2) return '';
   const coordType = points[0].coord_type || 'bd09ll';
   if (points.some(point => (point.coord_type || 'bd09ll') !== coordType)) return '';
-  const pointValue = point => `latlng:${point.latitude},${point.longitude}|name:${itemLocationLabel(point) || point.title || '行程点'}`;
+
+  const scheme = baiduAppScheme();
+  const pointValue = point => `name:${itemLocationLabel(point) || point.title || '行程点'}|latlng:${point.latitude},${point.longitude}`;
   const params = new URLSearchParams({
     origin: pointValue(points[0]),
     destination: pointValue(points[points.length - 1]),
     mode: day?.route_mode || 'driving',
     coord_type: coordType,
-    output: 'html',
     src: 'webapp.lazyxu.travel'
   });
   const via = points.slice(1, -1).map(point => ({
-    name: point.title || point.location || '行程点',
+    name: itemLocationLabel(point) || point.title || '行程点',
     lat: Number(point.latitude),
     lng: Number(point.longitude)
   }));
   if (via.length) params.set('viaPoints', JSON.stringify({ viaPoints: via }));
-  return `https://api.map.baidu.com/direction?${params.toString()}`;
+  return `${scheme}://map/direction?${params.toString()}`;
 }
 
 async function compressImageFile(file, maxDimension = 1600, quality = 0.82) {
