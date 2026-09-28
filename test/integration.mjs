@@ -159,6 +159,31 @@ try {
   assert.equal(aggregate.trip.currency, 'CNY');
   assert.equal(Number(aggregate.trip.budget_total), 12000);
 
+  const hotel = await json(`/api/days/${day2.id}/items`, {
+    method: 'POST',
+    body: JSON.stringify({
+      startTime: '20:00',
+      endTime: '',
+      category: '住宿',
+      title: 'Hotel Link Test',
+      locationName: '杭州测试酒店',
+      location: '杭州市',
+      notes: '',
+      references: [],
+      imageUrls: [],
+      details: {
+        kind: 'lodging',
+        hotelName: '杭州测试酒店',
+        checkInDate: '2026-10-02',
+        checkOutDate: '2026-10-03',
+        bookingPlatform: '华住会',
+        bookingUrl: 'https://www.hworld.com/hotel/123'
+      }
+    })
+  });
+  assert.equal(hotel.details.bookingPlatform, '华住会');
+  assert.match(hotel.details.bookingUrl, /^https:\/\//);
+
   const expense = await json(`/api/trips/${created.trip.id}/expenses`, {
     method: 'POST',
     body: JSON.stringify({
@@ -222,7 +247,11 @@ try {
   assert.equal(updatedShare.settings.images, false);
   const publicAfterPrivacy = await json(`/api/public/share/${shareToken}`);
   assert.deepEqual(publicAfterPrivacy.expenses, []);
-  assert.deepEqual(publicAfterPrivacy.days[0].items.flatMap(item => item.links || []), []);
+  assert.deepEqual(publicAfterPrivacy.days.flatMap(day => day.items).flatMap(item => item.links || []), []);
+  const publicHotelAfterPrivacy = publicAfterPrivacy.days
+    .flatMap(day => day.items)
+    .find(item => item.title === 'Hotel Link Test');
+  assert.equal(publicHotelAfterPrivacy.details.bookingUrl, undefined);
 
   const revokeResponse = await fetch(`${base}/api/shares/${share.id}`, { method: 'DELETE' });
   assert.equal(revokeResponse.status, 204);
@@ -236,6 +265,22 @@ try {
     body: JSON.stringify({ includeRecent: true })
   });
   assert.ok(cleanup.deleted >= 1);
+
+  const analyzedMap = await json('/api/links/analyze', {
+    method: 'POST',
+    body: JSON.stringify({
+      value: 'https://api.map.baidu.com/marker?location=30.25,120.15&title=%E8%A5%BF%E6%B9%96&content=%E6%9D%AD%E5%B7%9E&coord_type=bd09ll&output=html&src=test',
+      context: 'reference',
+      region: '杭州'
+    })
+  });
+  assert.equal(analyzedMap.type, 'location');
+  assert.equal(analyzedMap.analysis.platform, 'baidu');
+  assert.equal(analyzedMap.location.name, '西湖');
+  assert.deepEqual(
+    { lat: analyzedMap.location.latitude, lng: analyzedMap.location.longitude },
+    { lat: 30.25, lng: 120.15 }
+  );
 
   const parsedMap = await json('/api/baidu/parse-link', {
     method: 'POST',
