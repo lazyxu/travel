@@ -100,7 +100,7 @@ export function detectPlatform(value) {
   if (/meituan\.com$|meituan\.net$/.test(host)) return 'meituan';
   if (/dianping\.com$|dpurl\.cn$/.test(host)) return 'dianping';
   if (/goofish\.com$|2\.taobao\.com$/.test(host)) return 'xianyu';
-  if (/weixin\.qq\.com$|mp\.weixin\.qq\.com$/.test(host)) return 'wechat';
+  if (/wxaurl\.cn$|weixin\.qq\.com$|mp\.weixin\.qq\.com$/.test(host)) return 'wechat';
   return 'web';
 }
 

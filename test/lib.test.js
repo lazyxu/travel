@@ -60,6 +60,7 @@ test('platform detection supports common travel reference sources', () => {
   assert.equal(detectPlatform('https://www.dianping.com/shop/1'), 'dianping');
   assert.equal(detectPlatform('https://www.goofish.com/item/1'), 'xianyu');
   assert.equal(detectPlatform('#小程序://某商家/abc'), 'wechat');
+  assert.equal(detectPlatform('https://wxaurl.cn/AbCdEf'), 'wechat');
 });
 test('private address detection blocks local networks', () => {
   assert.equal(isPrivateAddress('127.0.0.1'), true);

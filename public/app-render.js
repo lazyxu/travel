@@ -284,10 +284,14 @@ function itemCardHtml(item) {
               const platform = referencePlatformMeta(link.platform);
               const label = `${platform.icon} ${link.title || platform.label}`;
               if (link.kind === 'copy') {
-                return `<button class="link-chip generic platform-${attr(link.platform || 'web')}" type="button" data-copy-reference="${attr(link.value || '')}">${escapeHtml(label)} · 复制</button>`;
+                return `<button class="link-chip generic platform-${attr(link.platform || 'web')}" type="button" data-copy-reference="${attr(link.value || '')}">${escapeHtml(label)} · 复制口令</button>`;
               }
               const href = link.url || link.value || '';
-              return `<a class="link-chip generic platform-${attr(link.platform || 'web')}" href="${attr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)} ↗</a>`;
+              if (link.platform === 'wechat' && link.kind === 'uri') {
+                return `<button class="link-chip generic platform-wechat" type="button" data-open-wechat-scheme="${attr(href)}">${escapeHtml(label)} · 打开小程序</button>`;
+              }
+              const suffix = link.platform === 'wechat' ? ' · 打开小程序' : ' ↗';
+              return `<a class="link-chip generic platform-${attr(link.platform || 'web')}" href="${attr(href)}" rel="noopener noreferrer">${escapeHtml(label)}${suffix}</a>`;
             }).join('')}
           </div>
         ` : ''}
@@ -509,6 +513,23 @@ function bindHero() {
 
 
 function bindReferenceActions() {
+  el.main.querySelectorAll('[data-open-wechat-scheme]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const value = button.dataset.openWechatScheme || '';
+      if (!value) return;
+      if (isWeChatBrowser()) {
+        try {
+          await copyText(value);
+          showToast('微信内网页不能直接用 URL Scheme 打开任意小程序，链接已复制');
+        } catch {
+          showToast('微信内请复制链接后在外部浏览器打开', 'error');
+        }
+        return;
+      }
+      window.location.href = value;
+    });
+  });
+
   el.main.querySelectorAll('[data-copy-reference]').forEach(button => {
     button.addEventListener('click', async () => {
       try {

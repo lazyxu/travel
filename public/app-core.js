@@ -292,22 +292,38 @@ function itemLocationLabel(item) {
   return item?.location_name || item?.location || '';
 }
 
+function isAndroidBrowser() {
+  return /Android/i.test(navigator.userAgent);
+}
+
+function isWeChatBrowser() {
+  return /MicroMessenger/i.test(navigator.userAgent);
+}
+
 function baiduAppScheme() {
-  return /Android/i.test(navigator.userAgent) ? 'bdapp' : 'baidumap';
+  return isAndroidBrowser() ? 'bdapp' : 'baidumap';
+}
+
+function baiduAppSrc() {
+  return isAndroidBrowser() ? 'webapp.lazyxu.travel' : 'ios.lazyxu.travel';
+}
+
+function enc(value) {
+  return encodeURIComponent(String(value ?? ''));
 }
 
 function baiduPointUrl(item) {
   if (!hasItemCoordinates(item)) return '';
   const scheme = baiduAppScheme();
   const label = itemLocationLabel(item) || item.title || '行程地点';
-  const params = new URLSearchParams({
-    location: `${item.latitude},${item.longitude}`,
-    title: label,
-    content: item.location || label,
-    coord_type: item.coord_type || 'bd09ll',
-    src: 'webapp.lazyxu.travel'
-  });
-  return `${scheme}://map/marker?${params.toString()}`;
+  const pairs = [
+    ['location', `${item.latitude},${item.longitude}`],
+    ['title', label],
+    ['content', item.location || label],
+    ['coord_type', item.coord_type || 'bd09ll'],
+    ['src', baiduAppSrc()]
+  ];
+  return `${scheme}://map/marker?${pairs.map(([key, value]) => `${key}=${enc(value)}`).join('&')}`;
 }
 
 function hotelStayRange(item) {
@@ -330,7 +346,6 @@ function hotelStayAnchorsForDay(day) {
   const hotels = (state.current?.days || []).flatMap(sourceDay => sourceDay.items || []).filter(item => hotelStayRange(item));
   const morning = [];
   const night = [];
-
   for (const hotel of hotels) {
     const range = hotelStayRange(hotel);
     const d = hotel.details || {};
@@ -362,28 +377,52 @@ function dayDisplayItems(day) {
   return [...anchors.morning, ...regular, ...anchors.night];
 }
 
+function baiduDirectionPoint(point) {
+  const name = itemLocationLabel(point) || point.title || '行程点';
+  return `name:${name}|latlng:${point.latitude},${point.longitude}`;
+}
+
+function baiduViaPoint(point) {
+  const result = {
+    name: itemLocationLabel(point) || point.title || '行程点',
+    lat: Number(point.latitude),
+    lng: Number(point.longitude)
+  };
+  if (point.location_uid) result.uid = point.location_uid;
+  return result;
+}
+
 function baiduDayRouteUrl(day) {
   const points = dayDisplayItems(day).filter(hasItemCoordinates).slice(0, 17);
   if (points.length < 2) return '';
+
   const coordType = points[0].coord_type || 'bd09ll';
   if (points.some(point => (point.coord_type || 'bd09ll') !== coordType)) return '';
 
   const scheme = baiduAppScheme();
-  const pointValue = point => `name:${itemLocationLabel(point) || point.title || '行程点'}|latlng:${point.latitude},${point.longitude}`;
-  const params = new URLSearchParams({
-    origin: pointValue(points[0]),
-    destination: pointValue(points[points.length - 1]),
-    mode: day?.route_mode || 'driving',
-    coord_type: coordType,
-    src: 'webapp.lazyxu.travel'
-  });
-  const via = points.slice(1, -1).map(point => ({
-    name: itemLocationLabel(point) || point.title || '行程点',
-    lat: Number(point.latitude),
-    lng: Number(point.longitude)
-  }));
-  if (via.length) params.set('viaPoints', JSON.stringify({ viaPoints: via }));
-  return `${scheme}://map/direction?${params.toString()}`;
+  const origin = points[0];
+  const destination = points[points.length - 1];
+  const pairs = [
+    ['origin', baiduDirectionPoint(origin)],
+    ['destination', baiduDirectionPoint(destination)],
+    ['coord_type', coordType],
+    ['mode', day?.route_mode || 'driving']
+  ];
+
+  if (origin.location_uid) pairs.push(['origin_uid', origin.location_uid]);
+  if (destination.location_uid) pairs.push(['destination_uid', destination.location_uid]);
+
+  const region = state.current?.trip?.destination || '';
+  if (region) pairs.push(['region', region]);
+
+  const viaPoints = points.slice(1, -1).map(baiduViaPoint);
+  if (viaPoints.length) {
+    // 百度官方要求 viaPoints 的整个 JSON 先 encodeURIComponent，再拼到 URI。
+    pairs.push(['viaPoints', JSON.stringify({ viaPoints })]);
+  }
+
+  pairs.push(['src', baiduAppSrc()]);
+  return `${scheme}://map/direction?${pairs.map(([key, value]) => `${key}=${enc(value)}`).join('&')}`;
 }
 
 async function compressImageFile(file, maxDimension = 1600, quality = 0.82) {

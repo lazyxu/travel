@@ -122,7 +122,7 @@ async function getTripAggregate(id) {
       [id]
     ),
     pool.query(
-      `SELECT i.id, i.day_id, i.item_time, i.category, i.title, i.location_name, i.location, i.notes,
+      `SELECT i.id, i.day_id, i.item_time, i.category, i.title, i.location_name, i.location_uid, i.location, i.notes,
               i.xhs_url, i.dianping_url, i.links, i.image_urls,
               i.start_time, i.end_time, i.latitude, i.longitude, i.coord_type,
               i.details, i.position, i.created_at, i.updated_at
@@ -339,6 +339,7 @@ app.post('/api/days/:dayId/items', async (req, res) => {
   const category = categories.has(req.body?.category) ? req.body.category : '其他';
   const { startTime, endTime } = normalizeTimeRange(req.body?.startTime ?? req.body?.itemTime, req.body?.endTime);
   const locationName = cleanText(req.body?.locationName, 160);
+  const locationUid = cleanText(req.body?.locationUid, 128);
   const location = cleanText(req.body?.location, 240);
   const latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
   const longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
@@ -352,14 +353,14 @@ app.post('/api/days/:dayId/items', async (req, res) => {
 
   const result = await pool.query(
     `INSERT INTO itinerary_items (
-       day_id, item_time, start_time, end_time, category, title, location_name, location,
+       day_id, item_time, start_time, end_time, category, title, location_name, location_uid, location,
        latitude, longitude, coord_type, notes, links, image_urls, details, position
      )
-     SELECT $1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+     SELECT $1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
             COALESCE((SELECT MAX(position) + 1 FROM itinerary_items WHERE day_id = $1), 0)
      WHERE EXISTS (SELECT 1 FROM trip_days WHERE id = $1)
      RETURNING *`,
-    [dayId, startTime, endTime, category, title, locationName, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
+    [dayId, startTime, endTime, category, title, locationName, locationUid, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
   );
   if (!result.rowCount) throw httpError(404, '日期不存在');
   res.status(201).json(result.rows[0]);
@@ -371,6 +372,7 @@ app.put('/api/items/:id', async (req, res) => {
   const category = categories.has(req.body?.category) ? req.body.category : '其他';
   const { startTime, endTime } = normalizeTimeRange(req.body?.startTime ?? req.body?.itemTime, req.body?.endTime);
   const locationName = cleanText(req.body?.locationName, 160);
+  const locationUid = cleanText(req.body?.locationUid, 128);
   const location = cleanText(req.body?.location, 240);
   const latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
   const longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
@@ -385,10 +387,10 @@ app.put('/api/items/:id', async (req, res) => {
   const result = await pool.query(
     `UPDATE itinerary_items
         SET item_time = $2, start_time = $2, end_time = $3, category = $4, title = $5,
-            location_name = $6, location = $7, latitude = $8, longitude = $9, coord_type = $10, notes = $11,
-            links = $12, image_urls = $13, details = $14, updated_at = now()
+            location_name = $6, location_uid = $7, location = $8, latitude = $9, longitude = $10, coord_type = $11, notes = $12,
+            links = $13, image_urls = $14, details = $15, updated_at = now()
       WHERE id = $1 RETURNING *`,
-    [id, startTime, endTime, category, title, locationName, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
+    [id, startTime, endTime, category, title, locationName, locationUid, location, latitude, longitude, coordType, notes, JSON.stringify(links), imageUrls, JSON.stringify(details)]
   );
   if (!result.rowCount) throw httpError(404, '行程项不存在');
   res.json(result.rows[0]);

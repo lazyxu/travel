@@ -280,6 +280,7 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
           ${baiduPointUrl(item) ? `<a class="map-link" href="${attr(baiduPointUrl(item))}" target="_blank" rel="noopener noreferrer">在百度地图打开 ↗</a>` : '<span>尚未定位；可搜索地点或粘贴百度地图链接</span>'}
         </div>
       </div>
+      <input name="locationUid" type="hidden" value="${attr(item.location_uid || '')}" />
       <input name="latitude" type="hidden" value="${attr(item.latitude ?? '')}" />
       <input name="longitude" type="hidden" value="${attr(item.longitude ?? '')}" />
       <input name="coordType" type="hidden" value="${attr(item.coord_type || 'bd09ll')}" />
@@ -315,6 +316,7 @@ function openItemForm(day, item = null) {
       category: form.get('category'),
       title: form.get('title'),
       locationName: form.get('locationName'),
+      locationUid: form.get('locationUid'),
       location: form.get('location'),
       latitude: form.get('latitude'),
       longitude: form.get('longitude'),
@@ -359,6 +361,7 @@ function openItemForm(day, item = null) {
 
   const locationNameInput = el.sheetForm.querySelector('[name="locationName"]');
   const locationInput = el.sheetForm.querySelector('[name="location"]');
+  const locationUidInput = el.sheetForm.querySelector('[name="locationUid"]');
   const latInput = el.sheetForm.querySelector('[name="latitude"]');
   const lngInput = el.sheetForm.querySelector('[name="longitude"]');
   const coordInput = el.sheetForm.querySelector('[name="coordType"]');
@@ -395,6 +398,7 @@ function openItemForm(day, item = null) {
       });
       if (parsed.name && locationNameInput) locationNameInput.value = parsed.name;
       if (parsed.address && locationInput) locationInput.value = parsed.address;
+      if (locationUidInput) locationUidInput.value = '';
       if (parsed.location) {
         if (latInput) latInput.value = parsed.location.lat;
         if (lngInput) lngInput.value = parsed.location.lng;
@@ -450,12 +454,14 @@ function openItemForm(day, item = null) {
             const titleInput = el.sheetForm.querySelector('[name="title"]');
             const locationNameInput = el.sheetForm.querySelector('[name="locationName"]');
             const locationInput = el.sheetForm.querySelector('[name="location"]');
+            const locationUidInput = el.sheetForm.querySelector('[name="locationUid"]');
             const latInput = el.sheetForm.querySelector('[name="latitude"]');
             const lngInput = el.sheetForm.querySelector('[name="longitude"]');
             const coordInput = el.sheetForm.querySelector('[name="coordType"]');
             if (titleInput && !titleInput.value.trim()) titleInput.value = poi.name || '';
             if (locationNameInput) locationNameInput.value = poi.name || '';
             if (locationInput) locationInput.value = [poi.city, poi.district, poi.address || poi.name].filter(Boolean).join(' ');
+            if (locationUidInput) locationUidInput.value = poi.uid || '';
             if (latInput) latInput.value = poi.location?.lat ?? '';
             if (lngInput) lngInput.value = poi.location?.lng ?? '';
             if (coordInput) coordInput.value = 'bd09ll';

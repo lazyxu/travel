@@ -77,6 +77,7 @@ try {
       category: '景点',
       title: 'First',
       locationName: '西湖',
+      locationUid: 'poi-west-lake',
       location: 'West Lake',
       latitude: 30.25,
       longitude: 120.15,
@@ -136,6 +137,7 @@ try {
   assert.equal(currentDay2.route_mode, 'walking');
   assert.equal(currentDay2.items[0].details.kind, 'flight');
   assert.equal(currentDay2.items[0].location_name, '西湖');
+  assert.equal(currentDay2.items[0].location_uid, 'poi-west-lake');
   assert.equal(currentDay2.items[0].links[0].title, '自定义参考标题');
   assert.equal(aggregate.trip.currency, 'CNY');
   assert.equal(Number(aggregate.trip.budget_total), 12000);
