@@ -454,6 +454,9 @@ function bindItinerarySorting(day) {
       const clearDayTargets = () => {
         targets.querySelectorAll('[data-sort-day]').forEach(button => button.classList.remove('drop-active'));
       };
+      const clearLegTargets = () => {
+        timeline.querySelectorAll('[data-leg-drop].drag-leg-hover').forEach(node => node.classList.remove('drag-leg-hover'));
+      };
 
       const placeIndicator = (targetCard, after) => {
         const targetIndex = remainingIds.indexOf(targetCard.dataset.itemId);
@@ -485,12 +488,30 @@ function bindItinerarySorting(day) {
           targetDayId = dayTarget.dataset.sortDay;
           indicator.remove();
           clearDayTargets();
+          clearLegTargets();
           dayTarget.classList.add('drop-active');
           return;
         }
 
         targetDayId = String(day.id);
         clearDayTargets();
+        clearLegTargets();
+
+        const legTarget = stack.map(node => node?.closest?.('[data-leg-drop]')).find(Boolean);
+        if (legTarget && timeline.contains(legTarget)) {
+          const toId = String(legTarget.dataset.toKey || '').match(/^item:(\d+)$/)?.[1] || '';
+          const fromId = String(legTarget.dataset.fromKey || '').match(/^item:(\d+)$/)?.[1] || '';
+          if (toId && remainingIds.includes(toId)) {
+            dropIndex = remainingIds.indexOf(toId);
+            timeline.insertBefore(indicator, legTarget);
+          } else if (fromId && remainingIds.includes(fromId)) {
+            dropIndex = remainingIds.indexOf(fromId) + 1;
+            timeline.insertBefore(indicator, legTarget.nextSibling);
+          }
+          legTarget.classList.add('drag-leg-hover');
+          return;
+        }
+
         const targetCard = stack.find(node =>
           node?.matches?.('.timeline-card[data-item-id]')
           && node !== card
@@ -509,6 +530,7 @@ function bindItinerarySorting(day) {
         try { handle.releasePointerCapture?.(event.pointerId); } catch {}
         card.classList.remove('sorting-card');
         document.body.classList.remove('sorting-itinerary');
+        clearLegTargets();
         indicator.remove();
         preview.remove();
         targets.remove();
