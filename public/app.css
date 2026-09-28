@@ -2584,3 +2584,30 @@ body.dialog-open {
     gap: 6px;
   }
 }
+
+
+/* 2026-09-28 UI polish: disabled and loading states */
+.button:disabled,
+.structured-import-button:disabled,
+.item-action-popover button:disabled,
+.leg-mode-options button:disabled,
+.reference-remove:disabled,
+.image-editor-drag:disabled,
+.image-editor-remove:disabled,
+.dining-drag-handle:disabled {
+  opacity: .52;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+.field input:disabled,
+.field textarea:disabled,
+.field select:disabled {
+  color: #9a9e98;
+  background: #f3f4f1;
+  border-color: var(--line-soft);
+  cursor: not-allowed;
+}
+.button.primary:disabled {
+  background: #6f948b;
+}

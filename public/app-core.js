@@ -758,13 +758,17 @@ function registerPwa() {
 }
 registerPwa();
 
-function syncDialogBodyLock() {
-  const selectors = ['#sheet', '#item-subsheet', '#link-analyzer', '#order-analyzer'];
-  const open = selectors.some(selector => {
+function topOpenDialog() {
+  const selectors = ['#order-analyzer', '#link-analyzer', '#item-subsheet', '#sheet'];
+  for (const selector of selectors) {
     const node = document.querySelector(selector);
-    return node && !node.classList.contains('hidden');
-  });
-  document.body.classList.toggle('dialog-open', open);
+    if (node && !node.classList.contains('hidden')) return node;
+  }
+  return null;
+}
+
+function syncDialogBodyLock() {
+  document.body.classList.toggle('dialog-open', Boolean(topOpenDialog()));
 }
 
 function focusDialogInitial(root, preferred = null) {
@@ -787,6 +791,38 @@ function restoreDialogFocus(root) {
     try { target.focus({ preventScroll: true }); } catch { target.focus?.(); }
   }, 0);
 }
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Tab') return;
+  const dialog = topOpenDialog();
+  if (!dialog) return;
+
+  const focusables = [...dialog.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+  )].filter(node => {
+    if (!(node instanceof HTMLElement)) return false;
+    if (node.closest('.hidden')) return false;
+    return node.offsetParent !== null || getComputedStyle(node).position === 'fixed';
+  });
+
+  if (!focusables.length) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement;
+
+  if (!dialog.contains(active)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+    return;
+  }
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}, true);
 
 function openSheet(title, body, onSubmit) {
   el.sheetTitle.textContent = title;
