@@ -23,7 +23,7 @@ function ensureOrderAnalyzer() {
   if (modal) return modal;
   document.body.insertAdjacentHTML('beforeend', `
     <div id="order-analyzer-backdrop" class="order-analyzer-backdrop hidden"></div>
-    <section id="order-analyzer" class="order-analyzer hidden" role="dialog" aria-modal="true">
+    <section id="order-analyzer" class="order-analyzer hidden" role="dialog" aria-modal="true" aria-labelledby="order-analyzer-title">
       <div class="sheet-grabber"></div>
       <div class="sheet-head">
         <h2 id="order-analyzer-title">解析订单文本</h2>
@@ -53,6 +53,7 @@ function closeOrderAnalyzer(force = false) {
   document.querySelector('#order-analyzer-backdrop')?.classList.add('hidden');
   if (form) { form.innerHTML = ''; form.onsubmit = null; form.dataset.dirty = '0'; }
   syncDialogBodyLock();
+  restoreDialogFocus(modal);
   return true;
 }
 
@@ -132,6 +133,6 @@ function openOrderAnalyzer({ kind, anchorDate = '', title = '解析订单文本'
   document.querySelector('#order-analyzer-backdrop').classList.remove('hidden');
   modal.classList.remove('hidden');
   syncDialogBodyLock();
-  setTimeout(() => textInput.focus(), 50);
+  focusDialogInitial(modal, textInput);
   return form;
 }

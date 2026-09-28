@@ -15,7 +15,7 @@ function ensureLinkAnalyzer() {
 
   document.body.insertAdjacentHTML('beforeend', `
     <div id="link-analyzer-backdrop" class="link-analyzer-backdrop hidden"></div>
-    <section id="link-analyzer" class="link-analyzer hidden" role="dialog" aria-modal="true">
+    <section id="link-analyzer" class="link-analyzer hidden" role="dialog" aria-modal="true" aria-labelledby="link-analyzer-title">
       <div class="sheet-grabber"></div>
       <div class="sheet-head">
         <h2 id="link-analyzer-title">分析链接</h2>
@@ -51,6 +51,7 @@ function closeLinkAnalyzer(force = false) {
     form.dataset.dirty = '0';
   }
   syncDialogBodyLock();
+  restoreDialogFocus(modal);
   return true;
 }
 
@@ -309,6 +310,6 @@ function openLinkAnalyzer({ context = 'reference', initial = {}, region = '', ti
   document.querySelector('#link-analyzer-backdrop').classList.remove('hidden');
   modal.classList.remove('hidden');
   syncDialogBodyLock();
-  setTimeout(() => valueInput.focus(), 50);
+  focusDialogInitial(modal, valueInput);
   return form;
 }

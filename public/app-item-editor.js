@@ -149,7 +149,7 @@ function ensureItemSubsheet() {
 
   document.body.insertAdjacentHTML('beforeend', `
     <div id="item-subsheet-backdrop" class="item-subsheet-backdrop hidden"></div>
-    <section id="item-subsheet" class="item-subsheet hidden" aria-modal="true" role="dialog">
+    <section id="item-subsheet" class="item-subsheet hidden" aria-modal="true" aria-labelledby="item-subsheet-title" role="dialog">
       <div class="sheet-grabber"></div>
       <div class="sheet-head">
         <h2 id="item-subsheet-title"></h2>
@@ -195,6 +195,7 @@ function openItemSubsheet(title, body, onSubmit) {
   document.querySelector('#item-subsheet-backdrop').classList.remove('hidden');
   sheet.classList.remove('hidden');
   syncDialogBodyLock();
+  focusDialogInitial(sheet);
   return form;
 }
 
@@ -214,6 +215,7 @@ function closeItemSubsheet(force = false) {
     form.dataset.dirty = '0';
   }
   syncDialogBodyLock();
+  restoreDialogFocus(sheet);
   return true;
 }
 

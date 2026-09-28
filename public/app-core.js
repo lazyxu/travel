@@ -767,6 +767,27 @@ function syncDialogBodyLock() {
   document.body.classList.toggle('dialog-open', open);
 }
 
+function focusDialogInitial(root, preferred = null) {
+  if (!root) return;
+  root._returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const target = preferred || root.querySelector(
+    'form input:not([type="hidden"]):not([disabled]), form textarea:not([disabled]), form select:not([disabled]), form button:not([disabled])'
+  );
+  setTimeout(() => {
+    if (!target?.isConnected || root.classList.contains('hidden')) return;
+    try { target.focus({ preventScroll: true }); } catch { target.focus?.(); }
+  }, 50);
+}
+
+function restoreDialogFocus(root) {
+  const target = root?._returnFocus;
+  if (root) root._returnFocus = null;
+  setTimeout(() => {
+    if (!target?.isConnected) return;
+    try { target.focus({ preventScroll: true }); } catch { target.focus?.(); }
+  }, 0);
+}
+
 function openSheet(title, body, onSubmit) {
   el.sheetTitle.textContent = title;
   el.sheetForm.innerHTML = body;
@@ -784,6 +805,7 @@ function openSheet(title, body, onSubmit) {
   el.sheetBackdrop.classList.remove('hidden');
   el.sheet.classList.remove('hidden');
   syncDialogBodyLock();
+  focusDialogInitial(el.sheet);
 }
 
 function closeSheet() {
@@ -792,6 +814,7 @@ function closeSheet() {
   el.sheetForm.innerHTML = '';
   el.sheetForm.onsubmit = null;
   syncDialogBodyLock();
+  restoreDialogFocus(el.sheet);
 }
 
 async function loadTrips() {
