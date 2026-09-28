@@ -7,6 +7,7 @@ const SHELL = [
   '/app-extra.js',
   '/app-render.js',
   '/app-forms.js',
+  '/app-item-editor.js',
   '/manifest.webmanifest',
   '/icons/icon-192.svg',
   '/icons/icon-512.svg'
