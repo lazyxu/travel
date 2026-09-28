@@ -193,6 +193,29 @@ set_env_value() {
   mv "$tmp" "$ENV_PATH"
 }
 
+ensure_upload_layout() {
+  local upload_dir uid gid
+  upload_dir="$(grep -E '^TRAVEL_UPLOAD_DATA_DIR=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
+  upload_dir="${upload_dir:-$DATA_DIR/uploads}"
+  uid="$(id -u)"
+  gid="$(id -g)"
+
+  set_env_value TRAVEL_UPLOAD_DATA_DIR "$upload_dir"
+  set_env_value TRAVEL_APP_UID "$uid"
+  set_env_value TRAVEL_APP_GID "$gid"
+
+  mkdir -p "$upload_dir" 2>/dev/null || true
+  if [[ ! -d "$upload_dir" ]]; then
+    die "无法创建上传目录：$upload_dir"
+  fi
+  if [[ ! -w "$upload_dir" ]]; then
+    say "上传目录当前不可写：$upload_dir"
+    say "目录信息：$(ls -ld "$upload_dir" 2>/dev/null || true)"
+    die "请先执行：sudo chown -R $uid:$gid '$upload_dir'，然后重新运行 update"
+  fi
+  say "上传目录：$upload_dir（uid=$uid gid=$gid，可写）"
+}
+
 build_app_from_source() {
   local tmp archive src_dir image
   tmp="$(mktemp -d "$STATE_DIR/source-build.XXXXXX")"
@@ -337,6 +360,7 @@ install() {
   prepare_layout
   write_env_if_missing
   ensure_optional_env_defaults
+  ensure_upload_layout
   refresh_deploy_files
   pull_images
   say '启动 travel...'
@@ -352,11 +376,15 @@ update() {
   say "HTTP 策略：retries=$HTTP_RETRIES connect_timeout=${HTTP_CONNECT_TIMEOUT}s max_time=${HTTP_MAX_TIME}s"
   check_host
   [[ -f "$ENV_PATH" && -f "$COMPOSE_PATH" ]] || die 'travel 尚未安装，请先执行安装命令'
+  prepare_layout
   ensure_optional_env_defaults
+  ensure_upload_layout
   say '更新前备份数据库...'
   backup
   say '刷新部署文件...'
   refresh_deploy_files
+  ensure_optional_env_defaults
+  ensure_upload_layout
   say '部署文件已刷新，开始更新容器镜像...'
   pull_images
   say '镜像准备完成，滚动重建容器...'
@@ -390,7 +418,15 @@ doctor() {
   if [[ -f "$ENV_PATH" && -f "$COMPOSE_PATH" ]]; then
     compose config --quiet && say 'compose config: OK'
     compose ps
-    if compose exec -T app node -e "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+    local upload_dir
+    upload_dir="$(grep -E '^TRAVEL_UPLOAD_DATA_DIR=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
+    upload_dir="${upload_dir:-$DATA_DIR/uploads}"
+    if [[ -d "$upload_dir" && -w "$upload_dir" ]]; then
+      say "uploads host path: OK ($upload_dir)"
+    else
+      say "uploads host path: FAILED ($upload_dir)"
+    fi
+    if compose exec -T app node -e "fetch('http://127.0.0.1:8080/api/health').then(async r=>{if(!r.ok)process.exit(1); const j=await r.json(); console.log('uploadsReady='+j.uploadsReady)}).catch(()=>process.exit(1))" 2>&1 | tee -a "$LOG_FILE"; then
       say 'app health: OK'
     else
       say 'app health: FAILED'

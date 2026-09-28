@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +31,7 @@ const sessionSecret = process.env.TRAVEL_SESSION_SECRET || '';
 const cookieSecure = process.env.TRAVEL_COOKIE_SECURE === '1';
 const baiduMapAk = process.env.TRAVEL_BAIDU_MAP_AK || '';
 const uploadDir = process.env.TRAVEL_UPLOAD_DIR || '/data/uploads';
+let uploadsReady = false;
 const categories = new Set(['交通', '景点', '餐饮', '住宿', '购物', '其他']);
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -39,6 +41,19 @@ if (!authDisabled && (!adminPassword || !sessionSecret)) {
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '256kb' }));
+
+async function prepareUploadDir() {
+  try {
+    await fs.mkdir(uploadDir, { recursive: true });
+    await fs.access(uploadDir, fsConstants.W_OK);
+    uploadsReady = true;
+    console.log(`[travel] upload directory ready: ${uploadDir}`);
+  } catch (error) {
+    uploadsReady = false;
+    console.error(`[travel] upload directory unavailable: ${uploadDir}: ${error.code || 'ERROR'} ${error.message}`);
+    console.error('[travel] image upload is disabled, but the main application will continue to run');
+  }
+}
 
 function idParam(value, field = 'ID') {
   if (!/^\d+$/.test(String(value))) throw httpError(400, `${field}无效`);
@@ -150,7 +165,7 @@ async function createMissingDays(client, tripId, startDate, endDate) {
 
 app.get('/api/health', async (_req, res) => {
   await pool.query('SELECT 1');
-  res.json({ ok: true, version: process.env.TRAVEL_VERSION || 'dev' });
+  res.json({ ok: true, version: process.env.TRAVEL_VERSION || 'dev', uploadsReady });
 });
 
 app.get('/api/auth', (req, res) => {
@@ -420,6 +435,7 @@ app.post('/api/uploads/images', express.raw({
   type: ['image/jpeg', 'image/png', 'image/webp'],
   limit: '6mb'
 }), async (req, res) => {
+  if (!uploadsReady) throw httpError(503, '图片上传目录当前不可写，请检查服务器 ~/.travel/data/uploads 权限');
   if (!Buffer.isBuffer(req.body) || !req.body.length) throw httpError(400, '图片内容为空');
   const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
   const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
@@ -502,7 +518,7 @@ app.use((error, req, res, _next) => {
   });
 });
 
-await fs.mkdir(uploadDir, { recursive: true });
+await prepareUploadDir();
 await migrate();
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`travel listening on :${port}`);
