@@ -157,6 +157,15 @@ function weekday(date) {
   return ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
 }
 
+function defaultTripDay(days = [], today = localDateKey()) {
+  if (!days.length) return null;
+  const sorted = [...days].sort((a, b) => String(a.day_date || '').localeCompare(String(b.day_date || '')));
+  const exact = sorted.find(day => String(day.day_date || '').slice(0, 10) === today);
+  if (exact) return exact;
+  const next = sorted.find(day => String(day.day_date || '').slice(0, 10) > today);
+  return next || sorted[sorted.length - 1];
+}
+
 function tripStatusMeta(trip, today = localDateKey()) {
   const start = String(trip?.start_date || '').slice(0, 10);
   const end = String(trip?.end_date || '').slice(0, 10);
@@ -812,14 +821,14 @@ async function loadRoute() {
 
   if (route.name === 'todos') {
     state.tab = 'todos';
-    state.currentDayId = state.current.days[0]?.id || null;
+    state.currentDayId = defaultTripDay(state.current.days)?.id || null;
     renderCurrent();
     return;
   }
 
   const day = route.name === 'day'
     ? state.current.days.find(item => String(item.id) === String(route.dayId))
-    : state.current.days[0];
+    : defaultTripDay(state.current.days);
   state.currentDayId = day?.id || null;
   state.tab = 'itinerary';
 
