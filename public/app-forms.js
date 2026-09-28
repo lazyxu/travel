@@ -317,7 +317,7 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
           </div>
           <label class="check-field"><input name="initialExpensePaid" type="checkbox" /><span>已支付</span></label>
         </details>
-      ` : ''}
+      `}
       <div class="form-actions">
         ${item.id ? '<button id="delete-item" class="button danger" type="button">删除</button>' : ''}
         <button class="button primary" type="submit">保存</button>
