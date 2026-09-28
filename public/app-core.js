@@ -878,6 +878,7 @@ async function loadRoute() {
 
   if (route.name === 'todos') {
     state.tab = 'todos';
+    state.sortingDayId = null;
     state.currentDayId = defaultTripDay(state.current.days)?.id || null;
     renderCurrent();
     return;
@@ -887,6 +888,7 @@ async function loadRoute() {
     ? state.current.days.find(item => String(item.id) === String(route.dayId))
     : defaultTripDay(state.current.days);
   state.currentDayId = day?.id || null;
+  if (String(state.sortingDayId || '') !== String(state.currentDayId || '')) state.sortingDayId = null;
   state.tab = 'itinerary';
 
   if (day && route.name !== 'day') {

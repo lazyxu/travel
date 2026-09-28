@@ -111,6 +111,15 @@ async function bindDisclosureMenus(root = el.main) {
       button.addEventListener('click', () => menu.removeAttribute('open'));
     });
   });
+
+  if (!root.dataset.disclosureOutsideBound) {
+    root.dataset.disclosureOutsideBound = '1';
+    root.addEventListener('click', event => {
+      root.querySelectorAll('.item-action-menu[open], .leg-mode-menu[open], .day-action-menu[open]').forEach(menu => {
+        if (!menu.contains(event.target)) menu.removeAttribute('open');
+      });
+    });
+  }
 }
 
 function bindItineraryActions(day) {
