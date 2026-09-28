@@ -45,10 +45,14 @@ export async function migrate() {
         notes TEXT NOT NULL DEFAULT '',
         xhs_url TEXT NOT NULL DEFAULT '',
         dianping_url TEXT NOT NULL DEFAULT '',
+        image_urls TEXT[] NOT NULL DEFAULT '{}',
         position INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
+
+      ALTER TABLE itinerary_items
+        ADD COLUMN IF NOT EXISTS image_urls TEXT[] NOT NULL DEFAULT '{}';
 
       CREATE TABLE IF NOT EXISTS todos (
         id BIGSERIAL PRIMARY KEY,
