@@ -912,10 +912,15 @@ function closeSheet() {
 }
 
 async function loadTrips() {
-  state.trips = await api('/api/trips');
+  const version = ++routeLoadVersion;
+  const trips = await api('/api/trips');
+  if (version !== routeLoadVersion) return;
+  state.trips = trips;
   renderHome();
 }
 
+
+let routeLoadVersion = 0;
 
 function parseRoute(pathname = window.location.pathname) {
   if (pathname === '/' || pathname === '') return { name: 'home' };
@@ -940,23 +945,30 @@ async function navigate(path, { replace = false } = {}) {
 }
 
 async function loadRoute() {
+  const version = ++routeLoadVersion;
   const route = parseRoute();
+
   if (route.name === 'not-found') {
     history.replaceState({}, '', '/');
     return loadRoute();
   }
+
   if (route.name === 'home') {
     state.readonly = false;
     state.shareToken = '';
-    state.trips = await api('/api/trips');
+    const trips = await api('/api/trips');
+    if (version !== routeLoadVersion) return;
+    state.trips = trips;
     renderHome();
     return;
   }
 
   if (route.name === 'share') {
+    const current = await api(`/api/public/share/${route.token}`);
+    if (version !== routeLoadVersion) return;
     state.readonly = true;
     state.shareToken = route.token;
-    state.current = await api(`/api/public/share/${route.token}`);
+    state.current = current;
     state.currentDayId = state.current.days[0]?.id || null;
     el.backHome.classList.add('hidden');
     el.bottomNav.classList.add('hidden');
@@ -964,9 +976,12 @@ async function loadRoute() {
     return;
   }
 
+  const current = await api(`/api/trips/${route.tripId}`);
+  if (version !== routeLoadVersion) return;
+
   state.readonly = false;
   state.shareToken = '';
-  state.current = await api(`/api/trips/${route.tripId}`);
+  state.current = current;
   el.backHome.classList.remove('hidden');
   el.bottomNav.classList.remove('hidden');
 
