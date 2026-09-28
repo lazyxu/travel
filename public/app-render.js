@@ -264,7 +264,7 @@ function itemCardHtml(item, { readonly = false } = {}) {
                 return `<button class="link-chip generic platform-wechat" type="button" data-open-wechat-scheme="${attr(href)}">${escapeHtml(label)} · 打开小程序</button>`;
               }
               if (link.platform === 'dianping') {
-                const appHref = link.appUrl || 'dianping://';
+                const appHref = link.appUrl || dianpingClientAppUrl(href, link.title || platform.label);
                 return `<a class="link-chip generic platform-dianping app-deep-link" href="${attr(appHref)}">${escapeHtml(label)} · 打开 App</a>`;
               }
               const suffix = link.platform === 'wechat' ? ' · 打开小程序' : ' ↗';

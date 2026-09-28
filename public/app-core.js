@@ -229,6 +229,25 @@ function referencePlatformMeta(platform) {
   return REFERENCE_PLATFORM_META[platform] || REFERENCE_PLATFORM_META.web;
 }
 
+function dianpingClientAppUrl(value, title = '') {
+  try {
+    const url = new URL(String(value || ''), window.location.origin);
+    if (/(^|\.)(?:m\.)?dianping\.com$/.test(url.hostname.toLowerCase()) || url.hostname.toLowerCase() === 'www.dianping.com') {
+      const pathMatch = url.pathname.match(/\/(?:shop|shopshare)\/([A-Za-z0-9_-]+)/i);
+      const shopId = pathMatch?.[1]
+        || ['shopId', 'shopid', 'shopuuid', 'id']
+          .map(key => url.searchParams.get(key))
+          .find(candidate => /^[A-Za-z0-9_-]+$/.test(String(candidate || '')));
+      if (shopId) return `dianping://shopinfo?id=${encodeURIComponent(shopId)}`;
+    }
+  } catch {}
+
+  const keyword = String(title || '').trim();
+  return keyword
+    ? `dianping://searchshoplist?keyword=${encodeURIComponent(keyword)}`
+    : 'dianping://';
+}
+
 function itemReferenceEntries(item) {
   const refs = Array.isArray(item?.links) ? item.links : [];
   if (refs.length) {
