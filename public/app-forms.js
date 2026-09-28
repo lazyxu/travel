@@ -665,16 +665,8 @@ el.backHome.addEventListener('click', () => navigate('/'));
 el.bottomNav.querySelectorAll('[data-tab]').forEach(button => {
   button.addEventListener('click', () => {
     if (!state.current?.trip?.id) return;
-    if (button.dataset.tab === 'today') {
-      navigate(`/trips/${state.current.trip.id}/today`);
-      return;
-    }
     if (button.dataset.tab === 'todos') {
       navigate(`/trips/${state.current.trip.id}/todos`);
-      return;
-    }
-    if (button.dataset.tab === 'expenses') {
-      navigate(`/trips/${state.current.trip.id}/expenses`);
       return;
     }
     const dayId = state.currentDayId || state.current.days[0]?.id;

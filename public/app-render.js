@@ -57,19 +57,11 @@ async function refreshCurrent() {
 
 function renderCurrent() {
   if (!state.current) return renderHome();
-  el.topbarTitle.textContent = state.tab === 'today'
-    ? '今天'
-    : state.tab === 'todos'
-      ? '旅行待办'
-      : state.tab === 'expenses'
-        ? '费用预算'
-        : '每日行程';
+  el.topbarTitle.textContent = state.tab === 'todos' ? '旅行待办' : '每日行程';
   el.bottomNav.querySelectorAll('[data-tab]').forEach(button => {
     button.classList.toggle('active', button.dataset.tab === state.tab);
   });
-  if (state.tab === 'today') renderToday();
-  else if (state.tab === 'todos') renderTodos();
-  else if (state.tab === 'expenses') renderExpenses();
+  if (state.tab === 'todos') renderTodos();
   else renderItinerary();
 }
 
@@ -300,80 +292,6 @@ function itemCardHtml(item) {
   `;
 }
 
-function renderToday() {
-  const { trip, days } = state.current;
-  const todayKey = localDateKey();
-  const todayDay = days.find(day => String(day.day_date).slice(0, 10) === todayKey);
-  const nowTime = localTimeKey();
-
-  if (!todayDay) {
-    const delta = daysBetween(todayKey, trip.start_date);
-    const finished = todayKey > String(trip.end_date).slice(0, 10);
-    const target = finished ? days[days.length - 1] : days[0];
-    el.main.innerHTML = `
-      ${heroHtml()}
-      <section class="today-empty">
-        <div class="today-date">${escapeHtml(formatDate(todayKey))}</div>
-        <div class="today-empty-icon">${finished ? '🏁' : '🧳'}</div>
-        <h2>${finished ? '这次旅行已经结束' : delta > 0 ? `还有 ${delta} 天出发` : '今天不在旅行日期内'}</h2>
-        <p>${finished ? '可以回看最后一天的行程。' : '今天模式会在旅行日期到来后自动显示当天安排。'}</p>
-        ${target ? `<button id="today-open-target" class="button primary" type="button">${finished ? '查看最后一天' : '查看第一天'}</button>` : ''}
-      </section>
-    `;
-    bindHero();
-    el.main.querySelector('#today-open-target')?.addEventListener('click', () => navigate(`/trips/${trip.id}/day/${target.id}`));
-    return;
-  }
-
-  state.currentDayId = todayDay.id;
-  const timed = todayDay.items.filter(item => item.start_time || item.item_time);
-  const active = timed.find(item => {
-    const start = item.start_time || item.item_time;
-    const end = item.end_time || start;
-    return start <= nowTime && nowTime <= end;
-  });
-  const next = active || timed.find(item => (item.start_time || item.item_time) >= nowTime) || null;
-  const nextLabel = active ? '正在进行' : next ? '下一项' : '今天行程已完成';
-
-  el.main.innerHTML = `
-    ${heroHtml()}
-    <section class="today-head">
-      <div>
-        <div class="today-kicker">TODAY · D${dayNumber(todayDay.day_date, trip.start_date)}</div>
-        <h1>${escapeHtml(formatDate(todayDay.day_date))} · ${escapeHtml(todayDay.title || weekday(todayDay.day_date))}</h1>
-        ${todayDay.notes ? `<p>${escapeHtml(todayDay.notes)}</p>` : ''}
-      </div>
-      <button id="today-open-day" class="button ghost small" type="button">完整当天</button>
-    </section>
-    <section class="next-card ${active ? 'active' : ''}">
-      <div class="next-label">${nextLabel}</div>
-      ${next ? `
-        <div class="next-time">${escapeHtml(formatItemTime(next))}</div>
-        <strong>${escapeHtml(next.title)}</strong>
-        ${itemLocationLabel(next) ? `<span>📍 ${escapeHtml(itemLocationLabel(next))}</span>` : ''}
-        ${baiduPointUrl(next) ? `<a href="${attr(baiduPointUrl(next))}" >百度地图 App ↗</a>` : ''}
-      ` : '<strong>今天没有后续定时行程</strong>'}
-    </section>
-    <div class="section-head">
-      <div><h2>今天全部安排</h2><div class="section-subtitle">${todayDay.items.length} 项</div></div>
-      ${baiduDayRouteUrl(todayDay) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(todayDay))}" >🗺 百度地图 App 路线</a>` : ''}
-    </div>
-    <div class="timeline today-timeline">
-      ${dayDisplayItems(todayDay).length ? dayDisplayItems(todayDay).map(item => itemCardHtml(item)).join('') : '<div class="empty-state"><strong>今天没有安排</strong></div>'}
-    </div>
-  `;
-
-  bindHero();
-  bindReferenceActions();
-  el.main.querySelector('#today-open-day')?.addEventListener('click', () => navigate(`/trips/${trip.id}/day/${todayDay.id}`));
-  el.main.querySelectorAll('[data-edit-item]').forEach(button => {
-    button.addEventListener('click', () => {
-      const item = tripItemById(button.dataset.editItem);
-      if (item) openItemForm(todayDay, item);
-    });
-  });
-}
-
 function renderTodos() {
   const { todos } = state.current;
   const remaining = todos.filter(todo => !todo.done).length;
@@ -426,71 +344,6 @@ function renderTodos() {
       if (todo) openTodoForm(todo);
     });
   });
-}
-
-function renderExpenses() {
-  const { trip, expenses = [] } = state.current;
-  const currency = trip.currency || 'CNY';
-  const budget = Number(trip.budget_total || 0);
-  const planned = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-  const paid = expenses.filter(expense => expense.paid).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-  const remaining = budget - planned;
-  const categories = [...new Set(expenses.map(expense => expense.category))];
-
-  el.main.innerHTML = `
-    ${heroHtml()}
-    <section class="budget-summary">
-      <div class="budget-card primary"><span>总预算</span><strong>${budget > 0 ? escapeHtml(formatMoney(budget, currency)) : '未设置'}</strong></div>
-      <div class="budget-card"><span>已计划</span><strong>${escapeHtml(formatMoney(planned, currency))}</strong></div>
-      <div class="budget-card"><span>已支付</span><strong>${escapeHtml(formatMoney(paid, currency))}</strong></div>
-      <div class="budget-card ${remaining < 0 ? 'over' : ''}"><span>预算剩余</span><strong>${budget > 0 ? escapeHtml(formatMoney(remaining, currency)) : '—'}</strong></div>
-    </section>
-    ${categories.length ? `
-      <div class="expense-category-row">
-        ${categories.map(category => {
-          const total = expenses.filter(expense => expense.category === category).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-          return `<span class="pill">${escapeHtml(category)} · ${escapeHtml(formatMoney(total, currency))}</span>`;
-        }).join('')}
-      </div>
-    ` : ''}
-    <div class="section-head">
-      <div><h2>费用明细</h2><div class="section-subtitle">${expenses.length} 笔</div></div>
-      <button id="add-expense" class="button primary small" type="button">＋ 添加</button>
-    </div>
-    <div class="expense-list">
-      ${expenses.length ? expenses.map(expense => expenseHtml(expense, currency)).join('') : `
-        <div class="empty-state"><div class="empty-icon">¥</div><strong>还没有费用</strong><div>可以记录酒店、交通、餐饮、门票和购物预算。</div></div>
-      `}
-    </div>
-  `;
-
-  bindHero();
-  el.main.querySelector('#add-expense').addEventListener('click', () => openExpenseForm());
-  el.main.querySelectorAll('[data-edit-expense]').forEach(button => {
-    button.addEventListener('click', () => {
-      const expense = expenses.find(item => String(item.id) === button.dataset.editExpense);
-      if (expense) openExpenseForm(expense);
-    });
-  });
-}
-
-function expenseHtml(expense, currency) {
-  return `
-    <article class="expense-card ${expense.paid ? 'paid' : ''}">
-      <div class="expense-main">
-        <div class="expense-top">
-          <span class="category">${escapeHtml(expense.category)}</span>
-          <span class="expense-paid">${expense.paid ? '已支付' : '未支付'}</span>
-        </div>
-        <strong>${escapeHtml(expense.title)}</strong>
-        <div class="expense-meta">${expense.expense_date ? escapeHtml(formatDate(expense.expense_date)) : '未指定日期'}${expense.notes ? ` · ${escapeHtml(expense.notes)}` : ''}</div>
-      </div>
-      <div class="expense-side">
-        <strong>${escapeHtml(formatMoney(expense.amount, currency))}</strong>
-        <button class="card-action" type="button" data-edit-expense="${attr(expense.id)}">编辑</button>
-      </div>
-    </article>
-  `;
 }
 
 function todoHtml(todo) {

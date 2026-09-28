@@ -522,12 +522,8 @@ function parseRoute(pathname = window.location.pathname) {
   if (pathname === '/' || pathname === '') return { name: 'home' };
   let match = pathname.match(/^\/trips\/(\d+)\/day\/(\d+)\/?$/);
   if (match) return { name: 'day', tripId: match[1], dayId: match[2] };
-  match = pathname.match(/^\/trips\/(\d+)\/today\/?$/);
-  if (match) return { name: 'today', tripId: match[1] };
   match = pathname.match(/^\/trips\/(\d+)\/todos\/?$/);
   if (match) return { name: 'todos', tripId: match[1] };
-  match = pathname.match(/^\/trips\/(\d+)\/expenses\/?$/);
-  if (match) return { name: 'expenses', tripId: match[1] };
   match = pathname.match(/^\/trips\/(\d+)\/?$/);
   if (match) return { name: 'trip', tripId: match[1] };
   return { name: 'not-found' };
@@ -558,23 +554,8 @@ async function loadRoute() {
   el.backHome.classList.remove('hidden');
   el.bottomNav.classList.remove('hidden');
 
-  if (route.name === 'today') {
-    state.tab = 'today';
-    const today = localDateKey();
-    state.currentDayId = state.current.days.find(day => String(day.day_date).slice(0, 10) === today)?.id || state.current.days[0]?.id || null;
-    renderCurrent();
-    return;
-  }
-
   if (route.name === 'todos') {
     state.tab = 'todos';
-    state.currentDayId = state.current.days[0]?.id || null;
-    renderCurrent();
-    return;
-  }
-
-  if (route.name === 'expenses') {
-    state.tab = 'expenses';
     state.currentDayId = state.current.days[0]?.id || null;
     renderCurrent();
     return;
@@ -597,12 +578,8 @@ async function loadRoute() {
 
 function syncCurrentUrl({ replace = true } = {}) {
   if (!state.current?.trip?.id) return;
-  const path = state.tab === 'today'
-    ? `/trips/${state.current.trip.id}/today`
-    : state.tab === 'todos'
-      ? `/trips/${state.current.trip.id}/todos`
-      : state.tab === 'expenses'
-        ? `/trips/${state.current.trip.id}/expenses`
-        : `/trips/${state.current.trip.id}/day/${state.currentDayId}`;
+  const path = state.tab === 'todos'
+    ? `/trips/${state.current.trip.id}/todos`
+    : `/trips/${state.current.trip.id}/day/${state.currentDayId}`;
   history[replace ? 'replaceState' : 'pushState']({}, '', path);
 }

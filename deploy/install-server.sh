@@ -228,7 +228,12 @@ build_app_from_source() {
   [[ -n "$src_dir" ]] || die '源码包解压失败'
   image="$(grep -E '^TRAVEL_IMAGE=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
   image="${image:-ghcr.io/lazyxu/travel:master}"
-  docker build -t "$image" "$src_dir"
+  docker build -t "$image" \
+    --build-arg TRAVEL_BUILD_COMMIT="$SOURCE_REF" \
+    --build-arg TRAVEL_BUILD_MESSAGE="local fallback build from $SOURCE_REF" \
+    --build-arg TRAVEL_BUILD_COMMIT_TIME="unknown" \
+    --build-arg TRAVEL_BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    "$src_dir"
   trap - RETURN
   rm -rf "$tmp"
 }
@@ -314,7 +319,7 @@ show_access() {
   else
     say '访问认证：已开启'
   fi
-  say "管理命令：$MANAGER_PATH status | update | logs | doctor | backup"
+  say "管理命令：$MANAGER_PATH status | version | update | cleanup | logs | doctor | backup"
   local baidu_ak_value
   baidu_ak_value="$(grep -E '^TRAVEL_BAIDU_MAP_AK=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
   if [[ -n "$baidu_ak_value" ]]; then
@@ -393,6 +398,35 @@ update() {
   say '更新完成'
   say "完整更新日志：$LOG_FILE"
   compose ps
+}
+
+version() {
+  [[ -f "$ENV_PATH" && -f "$COMPOSE_PATH" ]] || die 'travel 尚未安装'
+  if ! compose ps --status running app 2>/dev/null | grep -q travel-app; then
+    die 'travel-app 当前未运行，无法读取运行版本'
+  fi
+  compose exec -T app node -e "
+    fetch('http://127.0.0.1:8080/api/version')
+      .then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(v => {
+        console.log('channel: ' + v.channel);
+        console.log('commit: ' + v.commit);
+        console.log('message: ' + v.message);
+        console.log('commit time: ' + v.commitTime);
+        console.log('build time: ' + v.buildTime);
+        console.log('schema: ' + v.schemaVersion + '/' + v.latestSchemaVersion);
+      })
+      .catch(e => { console.error(e.message); process.exit(1); });
+  "
+}
+
+cleanup() {
+  [[ -f "$ENV_PATH" && -f "$COMPOSE_PATH" ]] || die 'travel 尚未安装'
+  local args=()
+  [[ "${2:-}" == "--dry-run" ]] && args+=("--dry-run")
+  [[ "${2:-}" == "--all" || "${3:-}" == "--all" ]] && args+=("--all")
+  say '扫描孤儿上传图片...'
+  compose exec -T app node src/cleanup-uploads.js "${args[@]}"
 }
 
 status() {
@@ -495,6 +529,8 @@ case "${1:-install}" in
   install) install ;;
   update) update ;;
   status) status ;;
+  version) version ;;
+  cleanup) cleanup "$@" ;;
   logs) logs "$@" ;;
   doctor) doctor ;;
   backup) backup ;;
@@ -510,6 +546,8 @@ Commands:
   install   Install/start travel
   update    Backup, pull latest deployment files/images, and restart
   status    Show Docker Compose status and persistent paths
+  version   Show running commit, commit message, commit time and schema version
+  cleanup   Delete orphan uploaded images older than 24h (--dry-run or --all)
   logs      Follow logs (optionally: travel-server logs app|postgres)
   doctor    Check Docker, Compose config and app health
   backup    Create PostgreSQL dump under ~/.travel/backups

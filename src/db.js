@@ -8,11 +8,11 @@ export const pool = new Pool({
   idleTimeoutMillis: 30000
 });
 
-export async function migrate() {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(`
+const MIGRATIONS = [
+  {
+    version: 1,
+    name: 'baseline_20260928',
+    sql: `
       CREATE TABLE IF NOT EXISTS trips (
         id BIGSERIAL PRIMARY KEY,
         title TEXT NOT NULL,
@@ -122,14 +122,73 @@ export async function migrate() {
       CREATE INDEX IF NOT EXISTS idx_items_day_position ON itinerary_items(day_id, position, start_time, item_time);
       CREATE INDEX IF NOT EXISTS idx_todos_trip_done_position ON todos(trip_id, done, position);
       CREATE INDEX IF NOT EXISTS idx_expenses_trip_date_position ON expenses(trip_id, expense_date, position, id);
+    `
+  },
+  {
+    version: 2,
+    name: 'leg_modes_and_readonly_shares',
+    sql: `
+      ALTER TABLE trip_days ADD COLUMN IF NOT EXISTS leg_modes JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+      CREATE TABLE IF NOT EXISTS trip_shares (
+        id BIGSERIAL PRIMARY KEY,
+        trip_id BIGINT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+        token_hash CHAR(64) NOT NULL UNIQUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        revoked_at TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_trip_shares_trip_active
+        ON trip_shares(trip_id, created_at DESC)
+        WHERE revoked_at IS NULL;
+    `
+  }
+];
+
+export async function migrate() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
     `);
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
+
+    const appliedResult = await client.query('SELECT version FROM schema_migrations ORDER BY version');
+    const applied = new Set(appliedResult.rows.map(row => Number(row.version)));
+
+    for (const migration of MIGRATIONS) {
+      if (applied.has(migration.version)) continue;
+      await client.query('BEGIN');
+      try {
+        console.log(`[travel] applying migration ${migration.version}: ${migration.name}`);
+        await client.query(migration.sql);
+        await client.query(
+          'INSERT INTO schema_migrations (version, name) VALUES ($1, $2)',
+          [migration.version, migration.name]
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
+    }
   } finally {
     client.release();
   }
+}
+
+export async function migrationStatus() {
+  const result = await pool.query(
+    'SELECT version, name, applied_at FROM schema_migrations ORDER BY version'
+  );
+  return {
+    currentVersion: result.rows.length ? Number(result.rows[result.rows.length - 1].version) : 0,
+    latestVersion: MIGRATIONS[MIGRATIONS.length - 1]?.version || 0,
+    applied: result.rows
+  };
 }
 
 export async function withTx(fn) {

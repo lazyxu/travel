@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { migrate, pool, withTx } from './db.js';
+import { migrate, migrationStatus, pool, withTx } from './db.js';
 import {
   cleanText,
   enumerateDates,
@@ -25,6 +25,7 @@ import {
 } from './lib.js';
 import { resolveReferenceMetadata } from './link-preview.js';
 import { resolveBaiduMapLink, searchBaiduPoi } from './baidu.js';
+import { cleanupOrphanUploads } from './storage.js';
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
@@ -37,6 +38,13 @@ const uploadDir = process.env.TRAVEL_UPLOAD_DIR || '/data/uploads';
 let uploadsReady = false;
 const categories = new Set(['交通', '景点', '餐饮', '住宿', '购物', '其他']);
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const buildInfo = {
+  channel: process.env.TRAVEL_VERSION || 'dev',
+  commit: process.env.TRAVEL_BUILD_COMMIT || 'unknown',
+  message: process.env.TRAVEL_BUILD_MESSAGE || 'unknown',
+  commitTime: process.env.TRAVEL_BUILD_COMMIT_TIME || 'unknown',
+  buildTime: process.env.TRAVEL_BUILD_TIME || 'unknown'
+};
 
 if (!authDisabled && (!adminPassword || !sessionSecret)) {
   throw new Error('TRAVEL_ADMIN_PASSWORD and TRAVEL_SESSION_SECRET are required unless TRAVEL_AUTH_DISABLED=1');
@@ -175,7 +183,12 @@ async function createMissingDays(client, tripId, startDate, endDate) {
 
 app.get('/api/health', async (_req, res) => {
   await pool.query('SELECT 1');
-  res.json({ ok: true, version: process.env.TRAVEL_VERSION || 'dev', uploadsReady });
+  res.json({ ok: true, version: buildInfo.channel, commit: buildInfo.commit, uploadsReady });
+});
+
+app.get('/api/version', async (_req, res) => {
+  const schema = await migrationStatus();
+  res.json({ ...buildInfo, schemaVersion: schema.currentVersion, latestSchemaVersion: schema.latestVersion });
 });
 
 app.get('/api/auth', (req, res) => {
@@ -198,6 +211,15 @@ app.post('/api/logout', (_req, res) => {
 app.use('/api', (req, _res, next) => {
   if (!isAuthenticated(req)) return next(httpError(401, '请先登录'));
   next();
+});
+
+app.post('/api/maintenance/uploads/cleanup', async (req, res) => {
+  const result = await cleanupOrphanUploads({
+    uploadDir,
+    dryRun: toBoolean(req.body?.dryRun),
+    minAgeMs: toBoolean(req.body?.includeRecent) ? 0 : 24 * 60 * 60 * 1000
+  });
+  res.json(result);
 });
 
 app.get('/api/baidu/poi/search', async (req, res) => {
@@ -312,12 +334,14 @@ app.put('/api/trips/:id', async (req, res) => {
   });
 
   res.json(await getTripAggregate(id));
+  void cleanupOrphanUploads({ uploadDir, minAgeMs: 60 * 60 * 1000 }).catch(error => console.error('[travel] upload cleanup failed', error));
 });
 
 app.delete('/api/trips/:id', async (req, res) => {
   const result = await pool.query('DELETE FROM trips WHERE id = $1', [idParam(req.params.id, '旅行 ID')]);
   if (!result.rowCount) throw httpError(404, '旅行不存在');
   res.status(204).end();
+  void cleanupOrphanUploads({ uploadDir, minAgeMs: 60 * 60 * 1000 }).catch(error => console.error('[travel] upload cleanup failed', error));
 });
 
 app.put('/api/days/:id', async (req, res) => {
@@ -394,6 +418,7 @@ app.put('/api/items/:id', async (req, res) => {
   );
   if (!result.rowCount) throw httpError(404, '行程项不存在');
   res.json(result.rows[0]);
+  void cleanupOrphanUploads({ uploadDir, minAgeMs: 60 * 60 * 1000 }).catch(error => console.error('[travel] upload cleanup failed', error));
 });
 
 app.put('/api/days/:dayId/items/order', async (req, res) => {
@@ -482,6 +507,7 @@ app.delete('/api/items/:id', async (req, res) => {
   const result = await pool.query('DELETE FROM itinerary_items WHERE id = $1', [idParam(req.params.id, '行程项 ID')]);
   if (!result.rowCount) throw httpError(404, '行程项不存在');
   res.status(204).end();
+  void cleanupOrphanUploads({ uploadDir, minAgeMs: 60 * 60 * 1000 }).catch(error => console.error('[travel] upload cleanup failed', error));
 });
 
 const expenseCategories = new Set(['交通', '住宿', '餐饮', '门票', '购物', '其他']);
@@ -618,6 +644,14 @@ app.use((error, req, res, _next) => {
 
 await prepareUploadDir();
 await migrate();
+if (uploadsReady) {
+  try {
+    const cleanupResult = await cleanupOrphanUploads({ uploadDir, minAgeMs: 24 * 60 * 60 * 1000 });
+    if (cleanupResult.deleted) console.log(`[travel] cleaned ${cleanupResult.deleted} orphan upload(s), ${cleanupResult.bytes} bytes`);
+  } catch (error) {
+    console.error('[travel] startup upload cleanup failed', error);
+  }
+}
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`travel listening on :${port}`);
 });
