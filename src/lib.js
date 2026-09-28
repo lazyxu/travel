@@ -24,6 +24,19 @@ export function optionalUrl(value, field) {
   return url.toString();
 }
 
+export function normalizeUrlList(value, field = '图片链接', maxItems = 12) {
+  const source = Array.isArray(value) ? value : [value];
+  const urls = [];
+  for (const item of source.flatMap(entry => String(entry ?? '').split(/\r?\n/))) {
+    const raw = cleanText(item, 2000);
+    if (!raw) continue;
+    const normalized = optionalUrl(raw, field);
+    if (!urls.includes(normalized)) urls.push(normalized);
+    if (urls.length > maxItems) throw httpError(400, `${field}最多支持 ${maxItems} 个`);
+  }
+  return urls;
+}
+
 export function validDate(value, field) {
   const text = cleanText(value, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(`${text}T00:00:00Z`))) {
