@@ -2531,3 +2531,20 @@ body.dialog-open{
 .button.primary:disabled{
   background: #6f948b;
 }
+
+
+/* Empty-state icon system */
+.empty-icon svg{
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.empty-detail{
+  color: var(--muted);
+  font-size: var(--font-small);
+  line-height: 1.5;
+}

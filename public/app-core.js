@@ -66,6 +66,26 @@ function attr(value) {
   return escapeHtml(value);
 }
 
+function emptyStateIconSvg(kind = 'calendar') {
+  const icons = {
+    trip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7V5.5A2.5 2.5 0 0 1 8.5 3h7A2.5 2.5 0 0 1 18 5.5V7"/><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7v13M16 7v13M3 12h18"/></svg>',
+    add: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></svg>',
+    calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v3M18 3v3M4.5 8.5h15M5 5h14a1.5 1.5 0 0 1 1.5 1.5v12A1.5 1.5 0 0 1 19 20H5a1.5 1.5 0 0 1-1.5-1.5v-12A1.5 1.5 0 0 1 5 5Z"/></svg>',
+    link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9.5"/><path d="M7.5 16.5 6 18a3 3 0 0 1-4.2-4.2l3-3A3 3 0 0 1 9 10"/><path d="m16.5 7.5 1.5-1.5a3 3 0 0 1 4.2 4.2l-3 3A3 3 0 0 1 15 14"/></svg>'
+  };
+  return icons[kind] || icons.calendar;
+}
+
+function emptyStateHtml({ icon = 'calendar', title, detail = '' } = {}) {
+  return `
+    <div class="empty-state">
+      <div class="empty-icon">${emptyStateIconSvg(icon)}</div>
+      <strong>${escapeHtml(title || '暂无内容')}</strong>
+      ${detail ? `<div class="empty-detail">${escapeHtml(detail)}</div>` : ''}
+    </div>
+  `;
+}
+
 function showToast(message, type = 'info') {
   el.toast.textContent = message;
   el.toast.className = `toast show ${type === 'error' ? 'error' : ''}`;

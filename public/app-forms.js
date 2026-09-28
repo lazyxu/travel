@@ -264,7 +264,7 @@ window.addEventListener('popstate', () => {
     showToast(error.message, 'error');
     if (parseRoute().name === 'share') {
       showApp();
-      el.main.innerHTML = `<div class="empty-state"><strong>分享链接不可用</strong><div>${escapeHtml(error.message)}</div></div>`;
+      el.main.innerHTML = emptyStateHtml({ icon: 'link', title: '分享链接不可用', detail: error.message });
       return;
     }
     showLogin();

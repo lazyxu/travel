@@ -293,7 +293,7 @@ function renderSharedTrip() {
               ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}">${escapeHtml(dayRouteLabel(day))}</a>` : ''}
             </div>
             <div class="timeline">
-              ${dayDisplayItems(day).length ? dayTimelineHtml(day, { readonly: true }) : '<div class="empty-state"><strong>这一天暂无安排</strong></div>'}
+              ${dayDisplayItems(day).length ? dayTimelineHtml(day, { readonly: true }) : emptyStateHtml({ icon: 'calendar', title: '这一天暂无安排' })}
             </div>
           </section>
         `;

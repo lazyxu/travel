@@ -33,13 +33,11 @@ function renderHome() {
         `;
       }).join('')}
     </div>
-    ${state.trips.length ? '' : `
-      <div class="empty-state">
-        <div class="empty-icon">⌁</div>
-        <strong>还没有旅行计划</strong>
-        <div>创建后可以按天安排行程、保存小红书/大众点评链接和准备待办。</div>
-      </div>
-    `}
+    ${state.trips.length ? '' : emptyStateHtml({
+      icon: 'trip',
+      title: '还没有旅行计划',
+      detail: '创建后可以按天安排行程、保存链接和准备待办。'
+    })}
   `;
 
   el.main.querySelector('#create-trip').addEventListener('click', () => openTripForm());
@@ -137,16 +135,14 @@ function renderItinerary() {
         </div>
       </div>
       <div class="timeline ${String(state.sortingDayId) === String(day.id) ? 'reorder-mode' : ''}">
-        ${dayDisplayItems(day).length ? dayTimelineHtml(day) : `
-          <div class="empty-state">
-            <div class="empty-icon">＋</div>
-            <strong>这一天还没有安排</strong>
-            <div>添加景点、餐厅、交通或住宿，并把参考链接和图片一起保存。</div>
-          </div>
-        `}
+        ${dayDisplayItems(day).length ? dayTimelineHtml(day) : emptyStateHtml({
+          icon: 'add',
+          title: '这一天还没有安排',
+          detail: '添加景点、餐厅、交通或住宿，并把链接和图片一起保存。'
+        })}
       </div>
       <button id="add-item" class="fab" type="button" aria-label="添加行程">＋</button>
-    ` : '<div class="empty-state"><strong>暂无日期</strong></div>'}
+    ` : emptyStateHtml({ icon: 'calendar', title: '暂无日期', detail: '先为旅行设置出发和结束日期。' })}
   `;
 
   const dayTabs = el.main.querySelector('.day-tabs');
