@@ -15,7 +15,9 @@ const state = {
   trips: [],
   current: null,
   currentDayId: null,
-  tab: 'itinerary'
+  tab: 'itinerary',
+  readonly: false,
+  shareToken: ''
 };
 
 const el = {
@@ -212,16 +214,21 @@ function referencePlatformMeta(platform) {
   return REFERENCE_PLATFORM_META[platform] || REFERENCE_PLATFORM_META.web;
 }
 
-function itemReferenceValues(item) {
+function itemReferenceEntries(item) {
   const refs = Array.isArray(item?.links) ? item.links : [];
   if (refs.length) {
-    return refs.map(ref => {
-      const value = ref?.value || ref?.url || '';
-      const title = ref?.customTitle || ref?.title || '';
-      return title && value ? `${title} | ${value}` : value;
-    }).filter(Boolean);
+    return refs.map(ref => ({
+      title: ref?.customTitle || ref?.title || '',
+      value: ref?.value || ref?.url || ''
+    })).filter(ref => ref.value);
   }
-  return [item?.xhs_url, item?.dianping_url].filter(Boolean);
+  return [item?.xhs_url, item?.dianping_url]
+    .filter(Boolean)
+    .map(value => ({ title: '', value }));
+}
+
+function itemReferenceValues(item) {
+  return itemReferenceEntries(item).map(ref => ref.title ? `${ref.title} | ${ref.value}` : ref.value);
 }
 
 function extractReferenceInputs(value, maxItems = 12) {
@@ -377,6 +384,39 @@ function dayDisplayItems(day) {
   return [...anchors.morning, ...regular, ...anchors.night];
 }
 
+function itemRouteKey(item) {
+  if (item?._virtualStay) return `hotel:${item.id}:${item._stayRole}`;
+  return `item:${item?.id || 'unknown'}`;
+}
+
+function legKey(fromItem, toItem) {
+  return `${itemRouteKey(fromItem)}>${itemRouteKey(toItem)}`;
+}
+
+function legMode(day, fromItem, toItem) {
+  return day?.leg_modes?.[legKey(fromItem, toItem)] || 'driving';
+}
+
+function baiduLegUrl(fromItem, toItem, mode = 'driving') {
+  if (!hasItemCoordinates(fromItem) || !hasItemCoordinates(toItem)) return '';
+  const coordType = fromItem.coord_type || 'bd09ll';
+  if ((toItem.coord_type || 'bd09ll') !== coordType) return '';
+  const pairs = [
+    ['origin', baiduDirectionPoint(fromItem)],
+    ['destination', baiduDirectionPoint(toItem)],
+    ['coord_type', coordType],
+    ['mode', mode],
+    ['src', baiduAppSrc()]
+  ];
+  if (fromItem.location_uid) pairs.push(['origin_uid', fromItem.location_uid]);
+  if (toItem.location_uid) pairs.push(['destination_uid', toItem.location_uid]);
+  return `${baiduAppScheme()}://map/direction?${pairs.map(([key, value]) => `${key}=${enc(value)}`).join('&')}`;
+}
+
+function itemExpenses(item) {
+  return (state.current?.expenses || []).filter(expense => String(expense.item_id || '') === String(item?.id || ''));
+}
+
 function baiduDirectionPoint(point) {
   const name = itemLocationLabel(point) || point.title || '行程点';
   return `name:${name}|latlng:${point.latitude},${point.longitude}`;
@@ -520,6 +560,8 @@ async function loadTrips() {
 
 function parseRoute(pathname = window.location.pathname) {
   if (pathname === '/' || pathname === '') return { name: 'home' };
+  const shareMatch = pathname.match(/^\/share\/([A-Za-z0-9_-]{20,160})\/?$/);
+  if (shareMatch) return { name: 'share', token: shareMatch[1] };
   let match = pathname.match(/^\/trips\/(\d+)\/day\/(\d+)\/?$/);
   if (match) return { name: 'day', tripId: match[1], dayId: match[2] };
   match = pathname.match(/^\/trips\/(\d+)\/todos\/?$/);
@@ -545,11 +587,26 @@ async function loadRoute() {
     return loadRoute();
   }
   if (route.name === 'home') {
+    state.readonly = false;
+    state.shareToken = '';
     state.trips = await api('/api/trips');
     renderHome();
     return;
   }
 
+  if (route.name === 'share') {
+    state.readonly = true;
+    state.shareToken = route.token;
+    state.current = await api(`/api/public/share/${route.token}`);
+    state.currentDayId = state.current.days[0]?.id || null;
+    el.backHome.classList.add('hidden');
+    el.bottomNav.classList.add('hidden');
+    renderSharedTrip();
+    return;
+  }
+
+  state.readonly = false;
+  state.shareToken = '';
   state.current = await api(`/api/trips/${route.tripId}`);
   el.backHome.classList.remove('hidden');
   el.bottomNav.classList.remove('hidden');

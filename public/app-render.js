@@ -74,7 +74,10 @@ function heroHtml() {
         <div class="trip-summary-meta">${escapeHtml([trip.destination, formatRange(trip.start_date, trip.end_date)].filter(Boolean).join(' · '))}</div>
         ${trip.notes ? `<div class="trip-summary-notes">${escapeHtml(trip.notes)}</div>` : ''}
       </div>
-      <button id="edit-trip" class="button ghost small" type="button">编辑</button>
+      <div class="trip-summary-actions">
+        <button id="share-trip" class="button ghost small" type="button">分享</button>
+        <button id="edit-trip" class="button ghost small" type="button">编辑</button>
+      </div>
     </section>
   `;
 }
@@ -86,6 +89,7 @@ function renderItinerary() {
 
   el.main.innerHTML = `
     ${heroHtml()}
+    ${tripExpenseSummaryHtml()}
     <div class="day-tabs">
       ${days.map(item => `
         <button class="day-tab ${String(item.id) === String(state.currentDayId) ? 'active' : ''}" data-day-id="${attr(item.id)}" type="button">
@@ -111,7 +115,7 @@ function renderItinerary() {
         </div>
       </div>
       <div class="timeline">
-        ${dayDisplayItems(day).length ? dayDisplayItems(day).map(item => itemCardHtml(item)).join('') : `
+        ${dayDisplayItems(day).length ? dayTimelineHtml(day) : `
           <div class="empty-state">
             <div class="empty-icon">＋</div>
             <strong>这一天还没有安排</strong>
@@ -153,6 +157,7 @@ function renderItinerary() {
       }
     });
     bindItinerarySorting(day);
+    bindItineraryActions(day);
     el.main.querySelectorAll('[data-edit-item]').forEach(button => {
       button.addEventListener('click', () => {
         const item = tripItemById(button.dataset.editItem);
@@ -213,31 +218,35 @@ function structuredDetailsHtml(item) {
   return '';
 }
 
-function hotelStayAnchorHtml(item) {
+function hotelStayAnchorHtml(item, { readonly = false } = {}) {
   const mapUrl = baiduPointUrl(item);
   const hotelName = item.details?.hotelName || itemLocationLabel(item) || item.title || '酒店';
   const roleLabel = item._stayRole === 'morning' ? '从酒店出发' : '回酒店';
+  const showExpense = item._stayRole === 'night'
+    && item.details?.checkInDate
+    && String(item._virtualKey || '').endsWith(item.details.checkInDate);
   return `
     <article class="timeline-card hotel-stay-anchor ${item._stayRole || ''}" data-virtual-stay="${attr(item._virtualKey || '')}">
       <div class="timeline-time hotel-stay-time">${escapeHtml(item._stayTime || (item._stayRole === 'morning' ? '早晨' : '夜间'))}</div>
       <div class="timeline-content">
         <div class="timeline-top">
           <span class="category"><span class="category-icon">🏨</span>${roleLabel}</span>
-          <div class="card-actions">
+          ${readonly ? '' : `<div class="card-actions">
             <button class="card-action" type="button" data-edit-item="${attr(item.id)}">编辑酒店</button>
-          </div>
+          </div>`}
         </div>
         <h3>${escapeHtml(hotelName)}</h3>
         ${itemLocationLabel(item) && itemLocationLabel(item) !== hotelName ? `<div class="location">📍 ${escapeHtml(itemLocationLabel(item))}</div>` : ''}
         ${item.location_name && item.location ? `<div class="location-address">${escapeHtml(item.location)}</div>` : ''}
         ${mapUrl ? `<div class="map-row"><a class="map-link app-link" href="${attr(mapUrl)}">百度地图 App ↗</a></div>` : ''}
+        ${showExpense ? inlineExpenseHtml(item, { readonly }) : ''}
       </div>
     </article>
   `;
 }
 
-function itemCardHtml(item) {
-  if (item?._virtualStay) return hotelStayAnchorHtml(item);
+function itemCardHtml(item, { readonly = false } = {}) {
+  if (item?._virtualStay) return hotelStayAnchorHtml(item, { readonly });
   const category = categoryMeta(item.category);
   const images = Array.isArray(item.image_urls) ? item.image_urls : [];
   const links = Array.isArray(item.links) ? item.links : [];
@@ -249,10 +258,10 @@ function itemCardHtml(item) {
       <div class="timeline-content">
         <div class="timeline-top">
           <span class="category"><span class="category-icon" aria-hidden="true">${category.icon}</span>${escapeHtml(category.label)}</span>
-          <div class="card-actions">
+          ${readonly ? '' : `<div class="card-actions">
             <button class="drag-handle" type="button" data-drag-handle aria-label="拖动排序">⋮⋮</button>
             <button class="card-action" type="button" data-edit-item="${attr(item.id)}" aria-label="编辑">编辑</button>
-          </div>
+          </div>`}
         </div>
         <h3>${escapeHtml(item.title)}</h3>
         ${structuredDetailsHtml(item)}
@@ -287,6 +296,7 @@ function itemCardHtml(item) {
             }).join('')}
           </div>
         ` : ''}
+        ${inlineExpenseHtml(item, { readonly })}
       </div>
     </article>
   `;
@@ -362,6 +372,7 @@ function todoHtml(todo) {
 
 function bindHero() {
   el.main.querySelector('#edit-trip')?.addEventListener('click', () => openTripForm(state.current.trip));
+  el.main.querySelector('#share-trip')?.addEventListener('click', () => openShareManager());
 }
 
 

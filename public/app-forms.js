@@ -237,7 +237,7 @@ function collectItemDetails(form) {
 
 function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
   const startTime = item.start_time || item.item_time || '';
-  const links = itemReferenceValues(item);
+  const references = itemReferenceEntries(item);
   const selectedDayId = String(item.day_id || currentDayId || '');
   return `
     <div class="stack">
@@ -285,8 +285,7 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
       <input name="longitude" type="hidden" value="${attr(item.longitude ?? '')}" />
       <input name="coordType" type="hidden" value="${attr(item.coord_type || 'bd09ll')}" />
       <label class="field"><span>备注</span><textarea name="notes" maxlength="5000" placeholder="预约信息、交通方式、必点菜等">${escapeHtml(item.notes || '')}</textarea></label>
-      <label class="field"><span>参考入口</span><textarea name="references" class="link-url-input" maxlength="30000" placeholder="每行一个。可写：自定义标题 | 链接\n也可只粘贴小红书、抖音、美团、点评、闲鱼、微信等链接">${escapeHtml(links.join('\n'))}</textarea></label>
-      <p class="form-help">最多 12 个。自定义标题优先展示；只粘贴链接时会尽量提取帖子、商品或门店本身的标题，而不是网站名称。</p>
+      ${referenceEditorHtml(references)}
       <div class="field">
         <span>行程图片</span>
         <div class="image-upload-row">
@@ -300,6 +299,25 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
       </div>
       <div class="image-preview" data-image-preview>${imagePreviewHtml(item.image_urls || [])}</div>
       <p class="form-help">手机相册图片会压缩到最长边约 1600px 后上传到你自己的服务器；也支持外部 http/https 图片 URL。</p>
+      ${item.id ? '' : `
+        <details class="inline-expense-create">
+          <summary>同时记录费用（可选）</summary>
+          <div class="field-grid">
+            <label class="field"><span>金额</span><input name="initialExpenseAmount" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+            <label class="field"><span>分类</span>
+              <select name="initialExpenseCategory">
+                <option value="交通">交通</option>
+                <option value="住宿">住宿</option>
+                <option value="餐饮">餐饮</option>
+                <option value="门票">门票</option>
+                <option value="购物">购物</option>
+                <option value="其他">其他</option>
+              </select>
+            </label>
+          </div>
+          <label class="check-field"><input name="initialExpensePaid" type="checkbox" /><span>已支付</span></label>
+        </details>
+      ` : ''}
       <div class="form-actions">
         ${item.id ? '<button id="delete-item" class="button danger" type="button">删除</button>' : ''}
         <button class="button primary" type="submit">保存</button>
@@ -322,13 +340,14 @@ function openItemForm(day, item = null) {
       longitude: form.get('longitude'),
       coordType: form.get('coordType'),
       notes: form.get('notes'),
-      references: extractReferenceInputs(form.get('references'), 12),
+      references: collectReferenceEntries(form),
       imageUrls: extractImageRefs(form.get('imageUrls'), 12),
       details: collectItemDetails(form)
     };
     const targetDayId = String(form.get('targetDayId') || day.id);
+    let savedItem = item;
     if (item) {
-      await api(`/api/items/${item.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      savedItem = await api(`/api/items/${item.id}`, { method: 'PUT', body: JSON.stringify(payload) });
       if (targetDayId !== String(item.day_id)) {
         await api(`/api/items/${item.id}/move`, {
           method: 'PUT',
@@ -336,7 +355,23 @@ function openItemForm(day, item = null) {
         });
       }
     } else {
-      await api(`/api/days/${targetDayId}/items`, { method: 'POST', body: JSON.stringify(payload) });
+      savedItem = await api(`/api/days/${targetDayId}/items`, { method: 'POST', body: JSON.stringify(payload) });
+      const initialAmount = Number(form.get('initialExpenseAmount') || 0);
+      if (initialAmount > 0) {
+        const targetDay = state.current.days.find(value => String(value.id) === targetDayId);
+        await api(`/api/trips/${state.current.trip.id}/expenses`, {
+          method: 'POST',
+          body: JSON.stringify({
+            title: savedItem.title,
+            amount: initialAmount,
+            category: form.get('initialExpenseCategory') || '其他',
+            expenseDate: targetDay?.day_date || '',
+            itemId: savedItem.id,
+            paid: form.get('initialExpensePaid') === 'on',
+            notes: ''
+          })
+        });
+      }
     }
     closeSheet();
     if (targetDayId !== String(state.currentDayId)) {
@@ -358,6 +393,7 @@ function openItemForm(day, item = null) {
     if (categorySelect && (kind === 'flight' || kind === 'train')) categorySelect.value = '交通';
   };
   detailsKindSelect?.addEventListener('change', updateDetailsKind);
+  bindReferenceEditor();
 
   const locationNameInput = el.sheetForm.querySelector('[name="locationName"]');
   const locationInput = el.sheetForm.querySelector('[name="location"]');
@@ -534,7 +570,7 @@ function openItemForm(day, item = null) {
   }
 }
 
-function expenseFormHtml(expense = {}) {
+function expenseFormHtml(expense = {}, linkedItem = null) {
   const trip = state.current.trip;
   const allItems = state.current.days.flatMap(day => day.items.map(item => ({
     ...item,
@@ -555,12 +591,17 @@ function expenseFormHtml(expense = {}) {
         </label>
         <label class="field"><span>日期</span><input name="expenseDate" type="date" value="${attr(String(expense.expense_date || '').slice(0, 10))}" /></label>
       </div>
-      <label class="field"><span>关联行程（可选）</span>
-        <select name="itemId">
-          <option value="">不关联</option>
-          ${allItems.map(item => `<option value="${item.id}" ${String(expense.item_id || '') === String(item.id) ? 'selected' : ''}>${formatDate(item.day_date)} · ${escapeHtml(item.title)}</option>`).join('')}
-        </select>
-      </label>
+      ${linkedItem ? `
+        <div class="linked-expense-item">关联行程：<strong>${escapeHtml(linkedItem.title)}</strong></div>
+        <input name="itemId" type="hidden" value="${attr(linkedItem.id)}" />
+      ` : `
+        <label class="field"><span>关联行程</span>
+          <select name="itemId">
+            <option value="">不关联</option>
+            ${allItems.map(item => `<option value="${item.id}" ${String(expense.item_id || '') === String(item.id) ? 'selected' : ''}>${formatDate(item.day_date)} · ${escapeHtml(item.title)}</option>`).join('')}
+          </select>
+        </label>
+      `}
       <label class="check-field"><input name="paid" type="checkbox" ${expense.paid ? 'checked' : ''} /><span>已支付</span></label>
       <label class="field"><span>备注</span><textarea name="notes" maxlength="2000" placeholder="订单号、付款方式等">${escapeHtml(expense.notes || '')}</textarea></label>
       <div class="form-actions">
@@ -571,8 +612,18 @@ function expenseFormHtml(expense = {}) {
   `;
 }
 
-function openExpenseForm(expense = null) {
-  openSheet(expense ? '编辑费用' : '添加费用', expenseFormHtml(expense || {}), async form => {
+function openExpenseForm(expense = null, linkedItem = null) {
+  const linkedDay = linkedItem
+    ? state.current.days.find(day => day.items.some(item => String(item.id) === String(linkedItem.id)))
+    : null;
+  const initial = expense || (linkedItem ? {
+    title: linkedItem.title,
+    category: linkedItem.category === '景点' ? '门票' : linkedItem.category,
+    expense_date: linkedDay?.day_date || '',
+    item_id: linkedItem.id,
+    paid: false
+  } : {});
+  openSheet(expense ? '编辑费用' : '添加费用', expenseFormHtml(initial, linkedItem), async form => {
     const payload = {
       title: form.get('title'),
       amount: form.get('amount'),
@@ -686,12 +737,23 @@ window.addEventListener('popstate', () => {
 
 (async function boot() {
   try {
+    const initialRoute = parseRoute();
+    if (initialRoute.name === 'share') {
+      showApp();
+      await loadRoute();
+      return;
+    }
     const auth = await api('/api/auth');
     if (!auth.authenticated) return showLogin();
     showApp();
     await loadRoute();
   } catch (error) {
     showToast(error.message, 'error');
+    if (parseRoute().name === 'share') {
+      showApp();
+      el.main.innerHTML = `<div class="empty-state"><strong>分享链接不可用</strong><div>${escapeHtml(error.message)}</div></div>`;
+      return;
+    }
     showLogin();
   }
 })();

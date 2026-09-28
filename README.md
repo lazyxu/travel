@@ -7,12 +7,12 @@
 - 每日时间线：交通、景点、餐饮、住宿、购物、其他，并显示对应分类图标；支持单点时间或开始—结束时间范围；
 - 行程新增、编辑、删除；支持手机拖动排序、拖到其他 Day 跨天移动，也可在编辑表单中直接选择日期；
 - 每条行程支持最多 12 张图片：可用外部图片 URL，也可从手机相册选择；浏览器压缩后上传到 `~/.travel/data/uploads`；
-- 每条行程可保存地址、经纬度和坐标类型，可直接用百度地图打开；当天至少两个同坐标类型的坐标点时可生成百度地图多点路线，并可选择驾车、步行、公交或骑行；
-- 参考入口统一为泛化多入口模型，最多 12 个；支持微信小程序、抖音、美团、大众点评、小红书、闲鱼和普通网页，网页会尝试自动提取标题；
-- 今天模式：按手机本地日期自动定位当天 Day，显示正在进行 / 下一项及当天路线；
+- 每条行程可保存地址与百度 POI 定位，可直接用百度地图 App 打开；当天可生成多点路线；两站之间可单独选择 🚕驾车 / 🚶步行 / 🚇公交并打开对应路线；
+- 参考入口采用卡片式编辑器，最多 12 个；支持自定义展示标题，以及微信小程序、抖音、美团、大众点评、小红书、闲鱼和普通网页；
 - 酒店、飞机、高铁/火车支持结构化字段（入住退房、航班号/机场/航站楼、车次/车站/车厢/座位等）；
-- 费用预算：旅行总预算、币种、费用分类、计划金额、已支付状态与费用明细；
+- 费用与行程联动：费用直接显示在对应行程卡片内，可新增、编辑、标记已支付；旅行总预算仍保留；
 - 旅行待办：截止日期、备注、完成状态；
+- 只读分享：生成 `/share/:token` 网页链接，无需登录即可查看行程，参考链接/地图/图片仍可点击，费用与确认号不公开；
 - 移动端优先 UI；旅行列表、每日行程和待办均有独立 URL，可直接刷新、收藏和分享；
 - PWA：可添加到手机主屏幕，并缓存应用静态壳用于弱网启动；行程数据仍以服务器在线数据为准；
 - 行程地点支持百度 POI 搜索，选择结果后自动填地址与 BD-09 坐标；
@@ -49,7 +49,7 @@ PostgreSQL 17
 └── state/
 ```
 
-PostgreSQL 数据默认位于 `~/.travel/data/postgres`，删除/重建容器不会删除旅行数据。
+PostgreSQL 数据默认位于 `~/.travel/data/postgres`，删除/重建容器不会删除旅行数据。数据库升级使用 `schema_migrations` 记录版本，启动时只执行尚未应用的迁移。
 
 ## 一键安装
 
@@ -98,6 +98,9 @@ travel-server update
 
 ```bash
 travel-server status
+travel-server version
+travel-server cleanup --dry-run
+travel-server cleanup
 travel-server logs
 travel-server logs app
 travel-server doctor
@@ -114,7 +117,7 @@ travel-server password   # 仅在后续开启认证时使用
 ~/.travel/backups/travel-YYYYMMDD-HHMMSS.uploads.tar.gz
 ```
 
-默认保留 7 天，可在 `~/.travel/config/.env` 修改 `TRAVEL_BACKUP_RETENTION_DAYS`。
+默认保留 7 天，可在 `~/.travel/config/.env` 修改 `TRAVEL_BACKUP_RETENTION_DAYS`。本地上传图片会在启动和行程变更后清理未被数据库引用的孤儿文件；也可用 `travel-server cleanup --dry-run` 先预览。
 
 ## 配置
 
@@ -195,9 +198,8 @@ travel-server restart
 ```text
 /                              旅行列表
 /trips/:tripId/day/:dayId      某天行程
-/trips/:tripId/today           今天模式
 /trips/:tripId/todos           旅行待办
-/trips/:tripId/expenses        费用预算
+/share/:token                   旅行只读分享
 ```
 
 ## 本地开发

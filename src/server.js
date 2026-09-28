@@ -66,6 +66,50 @@ async function prepareUploadDir() {
   }
 }
 
+function hashShareToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+function shareTokenParam(value) {
+  const token = String(value || '');
+  if (!/^[A-Za-z0-9_-]{20,160}$/.test(token)) throw httpError(404, '分享链接无效');
+  return token;
+}
+
+async function shareTripId(token) {
+  const result = await pool.query(
+    `SELECT trip_id
+       FROM trip_shares
+      WHERE token_hash = $1 AND revoked_at IS NULL`,
+    [hashShareToken(token)]
+  );
+  if (!result.rowCount) throw httpError(404, '分享链接不存在或已失效');
+  return String(result.rows[0].trip_id);
+}
+
+async function publicTripAggregate(token) {
+  const tripId = await shareTripId(token);
+  const aggregate = await getTripAggregate(tripId);
+  aggregate.todos = [];
+  aggregate.expenses = [];
+  aggregate.days = aggregate.days.map(day => ({
+    ...day,
+    items: day.items.map(item => {
+      const details = { ...(item.details || {}) };
+      delete details.confirmationNo;
+      return {
+        ...item,
+        details,
+        image_urls: (item.image_urls || []).map(value => {
+          const match = String(value).match(/^\/uploads\/([a-zA-Z0-9._-]+)$/);
+          return match ? `/api/public/share/${token}/uploads/${match[1]}` : value;
+        })
+      };
+    })
+  }));
+  return aggregate;
+}
+
 function idParam(value, field = 'ID') {
   if (!/^\d+$/.test(String(value))) throw httpError(400, `${field}无效`);
   return String(value);
@@ -125,7 +169,7 @@ async function getTripAggregate(id) {
 
   const [daysResult, itemsResult, todosResult, expensesResult] = await Promise.all([
     pool.query(
-      `SELECT id, trip_id, day_date, title, notes, route_mode, position
+      `SELECT id, trip_id, day_date, title, notes, route_mode, leg_modes, position
          FROM trip_days WHERE trip_id = $1 ORDER BY day_date, position, id`,
       [id]
     ),
@@ -189,6 +233,35 @@ app.get('/api/health', async (_req, res) => {
 app.get('/api/version', async (_req, res) => {
   const schema = await migrationStatus();
   res.json({ ...buildInfo, schemaVersion: schema.currentVersion, latestSchemaVersion: schema.latestVersion });
+});
+
+app.get('/api/public/share/:token', async (req, res) => {
+  const token = shareTokenParam(req.params.token);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(await publicTripAggregate(token));
+});
+
+app.get('/api/public/share/:token/uploads/:name', async (req, res, next) => {
+  try {
+    const token = shareTokenParam(req.params.token);
+    const tripId = await shareTripId(token);
+    const name = String(req.params.name || '');
+    if (!/^[a-zA-Z0-9._-]+$/.test(name)) throw httpError(404, '图片不存在');
+    const ref = `/uploads/${name}`;
+    const allowed = await pool.query(
+      `SELECT 1
+         FROM itinerary_items i
+         JOIN trip_days d ON d.id = i.day_id
+        WHERE d.trip_id = $1 AND $2 = ANY(i.image_urls)
+        LIMIT 1`,
+      [tripId, ref]
+    );
+    if (!allowed.rowCount) throw httpError(404, '图片不存在');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    return res.sendFile(name, { root: uploadDir });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/auth', (req, res) => {
@@ -337,6 +410,47 @@ app.put('/api/trips/:id', async (req, res) => {
   void cleanupOrphanUploads({ uploadDir, minAgeMs: 60 * 60 * 1000 }).catch(error => console.error('[travel] upload cleanup failed', error));
 });
 
+app.get('/api/trips/:id/shares', async (req, res) => {
+  const tripId = idParam(req.params.id, '旅行 ID');
+  const result = await pool.query(
+    `SELECT id, created_at
+       FROM trip_shares
+      WHERE trip_id = $1 AND revoked_at IS NULL
+      ORDER BY created_at DESC`,
+    [tripId]
+  );
+  res.json(result.rows);
+});
+
+app.post('/api/trips/:id/shares', async (req, res) => {
+  const tripId = idParam(req.params.id, '旅行 ID');
+  const exists = await pool.query('SELECT 1 FROM trips WHERE id = $1', [tripId]);
+  if (!exists.rowCount) throw httpError(404, '旅行不存在');
+
+  const token = crypto.randomBytes(24).toString('base64url');
+  const result = await pool.query(
+    `INSERT INTO trip_shares (trip_id, token_hash)
+     VALUES ($1, $2)
+     RETURNING id, created_at`,
+    [tripId, hashShareToken(token)]
+  );
+  res.status(201).json({
+    id: result.rows[0].id,
+    created_at: result.rows[0].created_at,
+    path: `/share/${token}`
+  });
+});
+
+app.delete('/api/shares/:id', async (req, res) => {
+  const id = idParam(req.params.id, '分享 ID');
+  const result = await pool.query(
+    'UPDATE trip_shares SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL',
+    [id]
+  );
+  if (!result.rowCount) throw httpError(404, '分享链接不存在');
+  res.status(204).end();
+});
+
 app.delete('/api/trips/:id', async (req, res) => {
   const result = await pool.query('DELETE FROM trips WHERE id = $1', [idParam(req.params.id, '旅行 ID')]);
   if (!result.rowCount) throw httpError(404, '旅行不存在');
@@ -355,6 +469,29 @@ app.put('/api/days/:id', async (req, res) => {
   );
   if (!result.rowCount) throw httpError(404, '日期不存在');
   res.json(result.rows[0]);
+});
+
+app.put('/api/days/:dayId/leg-mode', async (req, res) => {
+  const dayId = idParam(req.params.dayId, '日期 ID');
+  const fromKey = cleanText(req.body?.fromKey, 100);
+  const toKey = cleanText(req.body?.toKey, 100);
+  const mode = cleanText(req.body?.mode, 12).toLowerCase();
+  if (!/^[A-Za-z0-9:_-]+$/.test(fromKey) || !/^[A-Za-z0-9:_-]+$/.test(toKey)) {
+    throw httpError(400, '路线分段标识无效');
+  }
+  if (!new Set(['driving', 'walking', 'transit']).has(mode)) {
+    throw httpError(400, '分段交通方式仅支持驾车、步行或公交');
+  }
+  const key = `${fromKey}>${toKey}`;
+  const result = await pool.query(
+    `UPDATE trip_days
+        SET leg_modes = jsonb_set(COALESCE(leg_modes, '{}'::jsonb), ARRAY[$2], to_jsonb($3::text), true)
+      WHERE id = $1
+      RETURNING leg_modes`,
+    [dayId, key, mode]
+  );
+  if (!result.rowCount) throw httpError(404, '日期不存在');
+  res.json({ ok: true, legModes: result.rows[0].leg_modes });
 });
 
 app.post('/api/days/:dayId/items', async (req, res) => {
@@ -457,7 +594,7 @@ app.put('/api/items/:id/move', async (req, res) => {
     if (!itemResult.rowCount) throw httpError(404, '行程项不存在');
     const item = itemResult.rows[0];
 
-    const targetDay = await client.query('SELECT id, trip_id FROM trip_days WHERE id = $1 FOR UPDATE', [targetDayId]);
+    const targetDay = await client.query('SELECT id, trip_id, day_date FROM trip_days WHERE id = $1 FOR UPDATE', [targetDayId]);
     if (!targetDay.rowCount) throw httpError(404, '目标日期不存在');
     if (String(targetDay.rows[0].trip_id) !== String(item.trip_id)) throw httpError(400, '只能在同一次旅行内移动行程');
 
@@ -470,6 +607,10 @@ app.put('/api/items/:id/move', async (req, res) => {
     ids.splice(position, 0, String(id));
 
     await client.query('UPDATE itinerary_items SET day_id = $2, updated_at = now() WHERE id = $1', [id, targetDayId]);
+    await client.query(
+      'UPDATE expenses SET expense_date = $2, updated_at = now() WHERE item_id = $1',
+      [id, targetDay.rows[0].day_date]
+    );
     for (let index = 0; index < ids.length; index += 1) {
       await client.query('UPDATE itinerary_items SET position = $2 WHERE id = $1', [ids[index], index]);
     }
