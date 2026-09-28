@@ -225,6 +225,20 @@ const REFERENCE_PLATFORM_META = {
   web: { icon: '🔗', label: '网页' }
 };
 
+function detectReferencePlatform(value) {
+  const raw = String(value || '').toLowerCase();
+  if (raw.startsWith('weixin://') || raw.includes('小程序://')) return 'wechat';
+  let host = '';
+  try { host = new URL(value).hostname.toLowerCase(); } catch {}
+  if (/xiaohongshu\.com$|xhslink\.com$/.test(host)) return 'xhs';
+  if (/douyin\.com$|iesdouyin\.com$/.test(host)) return 'douyin';
+  if (/meituan\.com$|meituan\.net$/.test(host)) return 'meituan';
+  if (/dianping\.com$|dpurl\.cn$/.test(host)) return 'dianping';
+  if (/goofish\.com$|2\.taobao\.com$/.test(host)) return 'xianyu';
+  if (/wxaurl\.cn$|weixin\.qq\.com$|mp\.weixin\.qq\.com$/.test(host)) return 'wechat';
+  return 'web';
+}
+
 function referencePlatformMeta(platform) {
   return REFERENCE_PLATFORM_META[platform] || REFERENCE_PLATFORM_META.web;
 }
@@ -255,12 +269,12 @@ function itemReferenceEntries(item) {
       customTitle: ref?.customTitle || '',
       autoTitle: ref?.autoTitle || (!ref?.customTitle ? (ref?.title || '') : ''),
       value: ref?.value || ref?.url || '',
-      platform: ref?.platform || 'web'
+      platform: ref?.platform || detectReferencePlatform(ref?.value || ref?.url || '')
     })).filter(ref => ref.value);
   }
   return [item?.xhs_url, item?.dianping_url]
     .filter(Boolean)
-    .map(value => ({ customTitle: '', autoTitle: '', value, platform: 'web' }));
+    .map(value => ({ customTitle: '', autoTitle: '', value, platform: detectReferencePlatform(value) }));
 }
 
 async function copyText(value) {

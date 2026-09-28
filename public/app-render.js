@@ -148,9 +148,10 @@ function structuredDetailsHtml(item) {
   if (!d.kind) return '';
 
   if (d.kind === 'lodging') {
+    const detailTitle = d.hotelName || '';
     return `
       <div class="structured-card lodging">
-        <div class="structured-title">🏨 ${escapeHtml(d.hotelName || item.title || '住宿')}</div>
+        ${detailTitle && detailTitle !== item.title ? `<div class="structured-title">🏨 ${escapeHtml(detailTitle)}</div>` : ''}
         <div class="structured-grid">
           ${(d.checkInDate || d.checkInTime) ? `<div><span>入住</span><strong>${escapeHtml(formatStructuredDateTime(d.checkInDate, d.checkInTime))}</strong></div>` : ''}
           ${(d.checkOutDate || d.checkOutTime) ? `<div><span>退房</span><strong>${escapeHtml(formatStructuredDateTime(d.checkOutDate, d.checkOutTime))}</strong></div>` : ''}
@@ -164,9 +165,10 @@ function structuredDetailsHtml(item) {
   }
 
   if (d.kind === 'flight') {
+    const detailTitle = [d.airline, d.flightNo].filter(Boolean).join(' ');
     return `
       <div class="structured-card flight">
-        <div class="structured-title">✈️ ${escapeHtml([d.airline, d.flightNo].filter(Boolean).join(' ') || item.title)}</div>
+        ${detailTitle && detailTitle !== item.title ? `<div class="structured-title">✈️ ${escapeHtml(detailTitle)}</div>` : ''}
         <div class="transport-route">
           <div><strong>${escapeHtml(d.departureAirport || '出发')}</strong><span>${escapeHtml([formatStructuredDateTime(d.departureDate, d.departureTime), d.departureTerminal].filter(Boolean).join(' · '))}</span></div>
           <div class="transport-arrow">→</div>
@@ -178,9 +180,10 @@ function structuredDetailsHtml(item) {
   }
 
   if (d.kind === 'train') {
+    const detailTitle = d.trainNo || '';
     return `
       <div class="structured-card train">
-        <div class="structured-title">🚄 ${escapeHtml(d.trainNo || item.title)}</div>
+        ${detailTitle && detailTitle !== item.title ? `<div class="structured-title">🚄 ${escapeHtml(detailTitle)}</div>` : ''}
         <div class="transport-route">
           <div><strong>${escapeHtml(d.departureStation || '出发')}</strong><span>${escapeHtml(formatStructuredDateTime(d.departureDate, d.departureTime))}</span></div>
           <div class="transport-arrow">→</div>
@@ -254,21 +257,22 @@ function itemCardHtml(item, { readonly = false } = {}) {
         ${links.length ? `
           <div class="link-row">
             ${links.map(link => {
-              const platform = referencePlatformMeta(link.platform);
+              const href = link.url || link.value || '';
+              const platformName = link.platform || detectReferencePlatform(href);
+              const platform = referencePlatformMeta(platformName);
               const label = `${platform.icon} ${link.title || platform.label}`;
               if (link.kind === 'copy') {
-                return `<button class="link-chip generic platform-${attr(link.platform || 'web')}" type="button" data-copy-reference="${attr(link.value || '')}">${escapeHtml(label)} · 复制口令</button>`;
+                return `<button class="link-chip generic platform-${attr(platformName)}" type="button" data-copy-reference="${attr(link.value || '')}">${escapeHtml(label)} · 复制口令</button>`;
               }
-              const href = link.url || link.value || '';
-              if (link.platform === 'wechat' && link.kind === 'uri') {
+              if (platformName === 'wechat' && link.kind === 'uri') {
                 return `<button class="link-chip generic platform-wechat" type="button" data-open-wechat-scheme="${attr(href)}">${escapeHtml(label)} · 打开小程序</button>`;
               }
-              if (link.platform === 'dianping') {
+              if (platformName === 'dianping') {
                 const appHref = link.appUrl || dianpingClientAppUrl(href, link.title || platform.label);
                 return `<a class="link-chip generic platform-dianping app-deep-link" href="${attr(appHref)}">${escapeHtml(label)} · 打开 App</a>`;
               }
-              const suffix = link.platform === 'wechat' ? ' · 打开小程序' : ' ↗';
-              return `<a class="link-chip generic platform-${attr(link.platform || 'web')}" href="${attr(href)}" rel="noopener noreferrer">${escapeHtml(label)}${suffix}</a>`;
+              const suffix = platformName === 'wechat' ? ' · 打开小程序' : ' ↗';
+              return `<a class="link-chip generic platform-${attr(platformName)}" href="${attr(href)}" rel="noopener noreferrer">${escapeHtml(label)}${suffix}</a>`;
             }).join('')}
           </div>
         ` : ''}
