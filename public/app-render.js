@@ -272,7 +272,7 @@ function itemCardHtml(item, { readonly = false } = {}) {
                 return `<a class="link-chip generic platform-dianping app-deep-link" href="${attr(appHref)}">${escapeHtml(label)} · 打开 App</a>`;
               }
               const suffix = platformName === 'wechat' ? ' · 打开小程序' : ' ↗';
-              return `<a class="link-chip generic platform-${attr(platformName)}" href="${attr(href)}" rel="noopener noreferrer">${escapeHtml(label)}${suffix}</a>`;
+              return `<a class="link-chip generic platform-${attr(platformName)}" href="${attr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}${suffix}</a>`;
             }).join('')}
           </div>
         ` : ''}

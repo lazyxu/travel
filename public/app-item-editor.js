@@ -105,8 +105,8 @@ function ensureItemSubsheet() {
   `);
 
   sheet = document.querySelector('#item-subsheet');
-  document.querySelector('#item-subsheet-close')?.addEventListener('click', closeItemSubsheet);
-  document.querySelector('#item-subsheet-backdrop')?.addEventListener('click', closeItemSubsheet);
+  document.querySelector('#item-subsheet-close')?.addEventListener('click', () => closeItemSubsheet());
+  document.querySelector('#item-subsheet-backdrop')?.addEventListener('click', () => closeItemSubsheet());
 
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape' || sheet.classList.contains('hidden')) return;
@@ -123,6 +123,9 @@ function openItemSubsheet(title, body, onSubmit) {
   const form = document.querySelector('#item-subsheet-form');
   document.querySelector('#item-subsheet-title').textContent = title;
   form.innerHTML = body;
+  form.dataset.dirty = '0';
+  form.oninput = () => { form.dataset.dirty = '1'; };
+  form.onchange = () => { form.dataset.dirty = '1'; };
   form.onsubmit = async event => {
     event.preventDefault();
     const submit = form.querySelector('[type="submit"]');
@@ -139,15 +142,22 @@ function openItemSubsheet(title, body, onSubmit) {
   return form;
 }
 
-function closeItemSubsheet() {
+function closeItemSubsheet(force = false) {
   const sheet = document.querySelector('#item-subsheet');
   const form = document.querySelector('#item-subsheet-form');
+  if (!force && form?.dataset.dirty === '1') {
+    if (!confirm('有尚未保存的修改，确定放弃吗？')) return false;
+  }
   sheet?.classList.add('hidden');
   document.querySelector('#item-subsheet-backdrop')?.classList.add('hidden');
   if (form) {
     form.innerHTML = '';
     form.onsubmit = null;
+    form.oninput = null;
+    form.onchange = null;
+    form.dataset.dirty = '0';
   }
+  return true;
 }
 
 function itemEditorDetailsFormHtml(kind, details = {}) {
@@ -361,6 +371,7 @@ function bindItemLocationEditor(subForm, mainForm) {
         field('longitude').value = parsed.location.lng;
         field('coordType').value = parsed.coordType || 'bd09ll';
       }
+      subForm.dataset.dirty = '1';
       updateMapAction();
       showToast(parsed.location ? '百度地图位置已解析' : '已识别地点，请搜索确认定位');
     } finally {
@@ -409,6 +420,7 @@ function bindItemLocationEditor(subForm, mainForm) {
           if (!mainForm.querySelector('[name="title"]').value.trim()) {
             mainForm.querySelector('[name="title"]').value = poi.name || '';
           }
+          subForm.dataset.dirty = '1';
           box.classList.add('hidden');
           updateMapAction();
         });
@@ -431,6 +443,7 @@ function bindItemLocationEditor(subForm, mainForm) {
   subForm.querySelector('[data-clear-location]')?.addEventListener('click', () => {
     ['locationName', 'location', 'locationUid', 'latitude', 'longitude'].forEach(name => { field(name).value = ''; });
     field('coordType').value = 'bd09ll';
+    subForm.dataset.dirty = '1';
     updateMapAction();
   });
 }
@@ -464,12 +477,14 @@ function bindReferenceEditorWithin(root) {
     const remove = event.target.closest('[data-remove-reference]');
     if (remove) {
       remove.closest('.reference-editor-row')?.remove();
+      root.dataset.dirty = '1';
       sync();
       return;
     }
     if (event.target.closest('#add-reference-row')) {
       if (editor.querySelectorAll('.reference-editor-row').length >= 12) return showToast('最多 12 个参考入口', 'error');
       list.insertAdjacentHTML('beforeend', referenceEditorRowHtml());
+      root.dataset.dirty = '1';
       sync();
     }
   });
@@ -497,6 +512,7 @@ function bindImageEditorWithin(root) {
     if (remove) {
       const index = Number(remove.closest('[data-image-index]')?.dataset.imageIndex);
       if (Number.isInteger(index)) images.splice(index, 1);
+      root.dataset.dirty = '1';
       render();
       return;
     }
@@ -507,6 +523,7 @@ function bindImageEditorWithin(root) {
       if (!url) return showToast('请输入有效的图片地址', 'error');
       if (!images.includes(url)) images.push(url);
       images = images.slice(0, 12);
+      root.dataset.dirty = '1';
       remoteInput.value = '';
       render();
     }
@@ -537,6 +554,7 @@ function bindImageEditorWithin(root) {
       if (upEvent.type !== 'pointercancel' && targetIndex !== sourceIndex) {
         const [moved] = images.splice(sourceIndex, 1);
         images.splice(targetIndex, 0, moved);
+        root.dataset.dirty = '1';
       }
       render();
     };
@@ -558,6 +576,7 @@ function bindImageEditorWithin(root) {
         const blob = await compressImageFile(files[index]);
         const url = await uploadImageBlob(blob);
         if (!images.includes(url)) images.push(url);
+        root.dataset.dirty = '1';
         render();
       }
     } finally {
@@ -739,7 +758,7 @@ function bindCompactItemEditor(mainForm, item) {
           }
 
           updateCompactItemAddon(mainForm, 'details', itemEditorDetailsSummary(typeSelect.value, next), true, '编辑');
-          closeItemSubsheet();
+          closeItemSubsheet(true);
         });
         return;
       }
@@ -753,7 +772,7 @@ function bindCompactItemEditor(mainForm, item) {
           });
           const hasLocation = Boolean(mainForm.querySelector('[name="locationName"]').value || mainForm.querySelector('[name="location"]').value || mainForm.querySelector('[name="latitude"]').value);
           updateCompactItemAddon(mainForm, 'location', itemEditorLocationSummary(mainForm), hasLocation, hasLocation ? '编辑' : '添加');
-          closeItemSubsheet();
+          closeItemSubsheet(true);
         });
         bindItemLocationEditor(subForm, mainForm);
         return;
@@ -773,7 +792,7 @@ function bindCompactItemEditor(mainForm, item) {
           const value = String(data.get('notes') || '');
           mainForm.querySelector('[name="notes"]').value = value;
           updateCompactItemAddon(mainForm, 'notes', itemEditorNoteSummary(value), Boolean(value.trim()), value.trim() ? '编辑' : '添加');
-          closeItemSubsheet();
+          closeItemSubsheet(true);
         });
         subForm.querySelector('[data-clear-note]')?.addEventListener('click', () => {
           subForm.querySelector('[name="notes"]').value = '';
@@ -792,7 +811,7 @@ function bindCompactItemEditor(mainForm, item) {
           const refs = collectReferenceEntries(data);
           mainForm.querySelector('[name="referencesJson"]').value = JSON.stringify(refs);
           updateCompactItemAddon(mainForm, 'references', itemEditorReferenceSummary(refs), refs.length > 0, refs.length ? '管理' : '添加');
-          closeItemSubsheet();
+          closeItemSubsheet(true);
         });
         bindReferenceEditorWithin(subForm);
         return;
@@ -809,7 +828,7 @@ function bindCompactItemEditor(mainForm, item) {
           const images = extractImageRefs(data.get('imageUrls'), 12);
           mainForm.querySelector('[name="imageUrls"]').value = images.join('\n');
           updateCompactItemAddon(mainForm, 'images', itemEditorImageSummary(images), images.length > 0, images.length ? '管理' : '添加');
-          closeItemSubsheet();
+          closeItemSubsheet(true);
         });
         bindImageEditorWithin(subForm);
         return;
@@ -847,7 +866,7 @@ function bindCompactItemEditor(mainForm, item) {
           mainForm.querySelector('[name="initialExpenseJson"]').value = JSON.stringify(next);
           const summary = amount > 0 ? `${formatMoney(amount, currency)} · ${next.category}${next.paid ? ' · 已支付' : ''}` : '未添加费用';
           updateCompactItemAddon(mainForm, 'expense', summary, amount > 0, amount > 0 ? '编辑' : '添加');
-          closeItemSubsheet();
+          closeItemSubsheet(true);
         });
         subForm.querySelector('[data-clear-expense]')?.addEventListener('click', () => {
           subForm.querySelector('[name="amount"]').value = '';
@@ -907,7 +926,7 @@ function openItemForm(day, item = null) {
       await api(`/api/days/${targetDayId}/items`, { method: 'POST', body: JSON.stringify(payload) });
     }
 
-    closeItemSubsheet();
+    closeItemSubsheet(true);
     closeSheet();
     if (targetDayId !== String(state.currentDayId)) {
       await navigate(`/trips/${state.current.trip.id}/day/${targetDayId}`);
@@ -925,7 +944,7 @@ function openItemForm(day, item = null) {
       if (!confirm(`确定删除“${item.title}”吗？`)) return;
       try {
         await api(`/api/items/${item.id}`, { method: 'DELETE' });
-        closeItemSubsheet();
+        closeItemSubsheet(true);
         closeSheet();
         await refreshCurrent();
         showToast('行程已删除');
