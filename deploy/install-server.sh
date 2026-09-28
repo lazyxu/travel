@@ -173,8 +173,25 @@ ensure_shell_path() {
 }
 
 
+remove_legacy_global_link() {
+  local legacy="/usr/local/bin/travel-server"
+  [[ -L "$legacy" ]] || return 0
+
+  local target
+  target="$(readlink "$legacy" 2>/dev/null || true)"
+  [[ "$target" == "$MANAGER_PATH" ]] || return 0
+
+  if rm -f "$legacy" 2>/dev/null; then
+    say "已清理旧版系统级软链接：$legacy"
+  else
+    say "检测到旧版系统级软链接：$legacy"
+    say "请手动执行：sudo rm -f '$legacy'"
+  fi
+}
+
 configure_shell_command() {
   local rc_file
+  remove_legacy_global_link
   ensure_shell_path
   rc_file="$(shell_rc_file)"
 
