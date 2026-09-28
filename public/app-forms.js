@@ -235,6 +235,29 @@ function collectItemDetails(form) {
   };
 }
 
+function initialExpenseFieldsHtml(item = {}) {
+  if (item.id) return '';
+  return `
+    <details class="inline-expense-create">
+      <summary>同时记录费用（可选）</summary>
+      <div class="field-grid">
+        <label class="field"><span>金额</span><input name="initialExpenseAmount" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+        <label class="field"><span>分类</span>
+          <select name="initialExpenseCategory">
+            <option value="交通">交通</option>
+            <option value="住宿">住宿</option>
+            <option value="餐饮">餐饮</option>
+            <option value="门票">门票</option>
+            <option value="购物">购物</option>
+            <option value="其他">其他</option>
+          </select>
+        </label>
+      </div>
+      <label class="check-field"><input name="initialExpensePaid" type="checkbox" /><span>已支付</span></label>
+    </details>
+  `;
+}
+
 function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
   const startTime = item.start_time || item.item_time || '';
   const references = itemReferenceEntries(item);
@@ -299,25 +322,7 @@ function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
       </div>
       <div class="image-preview" data-image-preview>${imagePreviewHtml(item.image_urls || [])}</div>
       <p class="form-help">手机相册图片会压缩到最长边约 1600px 后上传到你自己的服务器；也支持外部 http/https 图片 URL。</p>
-      ${item.id ? '' : `
-        <details class="inline-expense-create">
-          <summary>同时记录费用（可选）</summary>
-          <div class="field-grid">
-            <label class="field"><span>金额</span><input name="initialExpenseAmount" type="number" min="0" step="0.01" placeholder="0.00" /></label>
-            <label class="field"><span>分类</span>
-              <select name="initialExpenseCategory">
-                <option value="交通">交通</option>
-                <option value="住宿">住宿</option>
-                <option value="餐饮">餐饮</option>
-                <option value="门票">门票</option>
-                <option value="购物">购物</option>
-                <option value="其他">其他</option>
-              </select>
-            </label>
-          </div>
-          <label class="check-field"><input name="initialExpensePaid" type="checkbox" /><span>已支付</span></label>
-        </details>
-      `}
+      ${initialExpenseFieldsHtml(item)}
       <div class="form-actions">
         ${item.id ? '<button id="delete-item" class="button danger" type="button">删除</button>' : ''}
         <button class="button primary" type="submit">保存</button>
