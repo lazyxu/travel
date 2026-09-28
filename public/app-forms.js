@@ -146,13 +146,18 @@ function openExpenseForm(expense = null, linkedItem = null) {
   const linkedDay = linkedItem
     ? state.current.days.find(day => day.items.some(item => String(item.id) === String(linkedItem.id)))
     : null;
+  const activeDay = state.current.days.find(day => String(day.id) === String(state.currentDayId))
+    || defaultTripDay(state.current.days);
   const initial = expense || (linkedItem ? {
     title: linkedItem.title,
     category: linkedItem.category === '景点' ? '门票' : linkedItem.category,
-    expense_date: linkedDay?.day_date || '',
+    expense_date: linkedDay?.day_date || activeDay?.day_date || localDateKey(),
     item_id: linkedItem.id,
     paid: false
-  } : {});
+  } : {
+    expense_date: activeDay?.day_date || localDateKey(),
+    paid: false
+  });
   openSheet(expense ? '编辑费用' : '添加费用', expenseFormHtml(initial, linkedItem), async form => {
     const payload = {
       title: form.get('title'),
@@ -196,6 +201,11 @@ function todoFormHtml(todo = {}) {
     <div class="stack">
       <label class="field"><span>待办 *</span><input name="title" required maxlength="200" value="${attr(todo.title || '')}" placeholder="例如：预订机场接送" /></label>
       <label class="field"><span>截止日期</span><input name="dueDate" type="date" value="${attr(String(todo.due_date || '').slice(0,10))}" /></label>
+      <div class="date-quick-actions" aria-label="截止日期快捷设置">
+        <button class="date-quick-button" type="button" data-todo-date="today">今天</button>
+        <button class="date-quick-button" type="button" data-todo-date="trip-start">出发日</button>
+        <button class="date-quick-button" type="button" data-todo-date="clear">清除</button>
+      </div>
       <label class="field"><span>备注</span><textarea name="notes" maxlength="3000" placeholder="订单号、注意事项等">${escapeHtml(todo.notes || '')}</textarea></label>
       <div class="form-actions">
         ${todo.id ? '<button id="delete-todo" class="button danger" type="button">删除</button>' : ''}
@@ -219,6 +229,19 @@ function openTodoForm(todo = null) {
     await refreshCurrent();
     showToast(todo ? '待办已更新' : '待办已添加');
   });
+
+  const dueInput = el.sheetForm.querySelector('[name="dueDate"]');
+  el.sheetForm.querySelectorAll('[data-todo-date]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (!dueInput) return;
+      const action = button.dataset.todoDate;
+      if (action === 'today') dueInput.value = localDateKey();
+      if (action === 'trip-start') dueInput.value = String(state.current?.trip?.start_date || '').slice(0, 10);
+      if (action === 'clear') dueInput.value = '';
+      dueInput.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+
   if (todo) {
     el.sheetForm.querySelector('#delete-todo').addEventListener('click', async event => {
       if (!confirm(`确定删除“${todo.title}”吗？此操作不可恢复。`)) return;

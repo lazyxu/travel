@@ -94,13 +94,26 @@ function showToast(message, type = 'info') {
 }
 
 async function api(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {})
-    }
-  });
+  const controller = options.signal ? null : new AbortController();
+  const timeout = controller ? setTimeout(() => controller.abort(), 30000) : null;
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      ...(controller ? { signal: controller.signal } : {}),
+      headers: {
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {})
+      }
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('请求超时，请稍后重试');
+    if (error instanceof TypeError) throw new Error('网络连接失败，请检查网络后重试');
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+
   let payload = null;
   if (response.status !== 204) {
     const text = await response.text();

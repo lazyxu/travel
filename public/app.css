@@ -2590,3 +2590,31 @@ body.dialog-open{
 @media (prefers-reduced-motion: reduce){
   .button.is-busy::after{ animation: none; }
 }
+
+
+/* Date quick actions */
+.date-quick-actions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: -5px;
+}
+.date-quick-button{
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 5px 9px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: var(--font-caption);
+  font-weight: 750;
+  cursor: pointer;
+}
+.date-quick-button:hover{
+  border-color: #cfd6d0;
+  color: var(--text);
+  background: #fff;
+}
+.date-quick-button:active{
+  transform: scale(.97);
+}
