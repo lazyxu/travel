@@ -268,6 +268,21 @@ async function getTripAggregate(id) {
   };
 }
 
+function applyDiningRouteLocation(category, details, locationState) {
+  if (category !== '餐饮' || details?.kind !== 'dining' || !Array.isArray(details.candidates) || !details.candidates.length) {
+    return locationState;
+  }
+  const first = details.candidates[0];
+  return {
+    locationName: first.name || '',
+    locationUid: first.locationUid || '',
+    location: first.address || '',
+    latitude: first.latitude ?? null,
+    longitude: first.longitude ?? null,
+    coordType: first.coordType || 'bd09ll'
+  };
+}
+
 function normalizeInlineExpense(value, fallbackTitle) {
   if (!value || typeof value !== 'object') return null;
   const amount = normalizeMoney(value.amount, '费用金额');
@@ -720,18 +735,21 @@ app.post('/api/days/:dayId/items', async (req, res) => {
   const title = requiredText(req.body?.title, '行程标题', 160);
   const category = categories.has(req.body?.category) ? req.body.category : '其他';
   const { startTime, endTime } = normalizeTimeRange(req.body?.startTime ?? req.body?.itemTime, req.body?.endTime);
-  const locationName = cleanText(req.body?.locationName, 160);
-  const locationUid = cleanText(req.body?.locationUid, 128);
-  const location = cleanText(req.body?.location, 240);
-  const latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
-  const longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
+  let locationName = cleanText(req.body?.locationName, 160);
+  let locationUid = cleanText(req.body?.locationUid, 128);
+  let location = cleanText(req.body?.location, 240);
+  let latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
+  let longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
   if ((latitude === null) !== (longitude === null)) throw httpError(400, '纬度和经度需要同时填写');
-  const coordType = normalizeCoordType(req.body?.coordType);
+  let coordType = normalizeCoordType(req.body?.coordType);
   const notes = cleanText(req.body?.notes, 5000);
   const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
   const referenceInputs = normalizeReferences(req.body?.references ?? req.body?.links ?? [], 12);
   const links = await resolveReferenceMetadata(referenceInputs);
   const details = normalizeItemDetails(req.body?.details);
+  ({ locationName, locationUid, location, latitude, longitude, coordType } = applyDiningRouteLocation(category, details, {
+    locationName, locationUid, location, latitude, longitude, coordType
+  }));
   const inlineExpense = normalizeInlineExpense(req.body?.expense, title);
 
   const created = await withTx(async client => {
@@ -776,18 +794,21 @@ app.put('/api/items/:id', async (req, res) => {
   const title = requiredText(req.body?.title, '行程标题', 160);
   const category = categories.has(req.body?.category) ? req.body.category : '其他';
   const { startTime, endTime } = normalizeTimeRange(req.body?.startTime ?? req.body?.itemTime, req.body?.endTime);
-  const locationName = cleanText(req.body?.locationName, 160);
-  const locationUid = cleanText(req.body?.locationUid, 128);
-  const location = cleanText(req.body?.location, 240);
-  const latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
-  const longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
+  let locationName = cleanText(req.body?.locationName, 160);
+  let locationUid = cleanText(req.body?.locationUid, 128);
+  let location = cleanText(req.body?.location, 240);
+  let latitude = normalizeCoordinate(req.body?.latitude, '纬度', -90, 90);
+  let longitude = normalizeCoordinate(req.body?.longitude, '经度', -180, 180);
   if ((latitude === null) !== (longitude === null)) throw httpError(400, '纬度和经度需要同时填写');
-  const coordType = normalizeCoordType(req.body?.coordType);
+  let coordType = normalizeCoordType(req.body?.coordType);
   const notes = cleanText(req.body?.notes, 5000);
   const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
   const referenceInputs = normalizeReferences(req.body?.references ?? req.body?.links ?? [], 12);
   const links = await resolveReferenceMetadata(referenceInputs);
   const details = normalizeItemDetails(req.body?.details);
+  ({ locationName, locationUid, location, latitude, longitude, coordType } = applyDiningRouteLocation(category, details, {
+    locationName, locationUid, location, latitude, longitude, coordType
+  }));
 
   const result = await pool.query(
     `UPDATE itinerary_items
@@ -800,6 +821,55 @@ app.put('/api/items/:id', async (req, res) => {
   if (!result.rowCount) throw httpError(404, '行程项不存在');
   res.json(result.rows[0]);
   void cleanupOrphanUploads({ uploadDir, minAgeMs: 60 * 60 * 1000 }).catch(error => console.error('[travel] upload cleanup failed', error));
+});
+
+app.put('/api/items/:id/dining-selection', async (req, res) => {
+  const id = idParam(req.params.id, '行程项 ID');
+  const candidateId = cleanText(req.body?.candidateId, 80);
+  if (!candidateId) throw httpError(400, '请选择候选餐厅');
+
+  const current = await pool.query(
+    'SELECT id, category, details FROM itinerary_items WHERE id = $1',
+    [id]
+  );
+  if (!current.rowCount) throw httpError(404, '行程项不存在');
+
+  const details = normalizeItemDetails(current.rows[0].details);
+  if (current.rows[0].category !== '餐饮' || details.kind !== 'dining') {
+    throw httpError(400, '该行程不是候选餐厅行程');
+  }
+  const index = details.candidates.findIndex(candidate => candidate.id === candidateId);
+  if (index < 0) throw httpError(404, '候选餐厅不存在');
+
+  const [chosen] = details.candidates.splice(index, 1);
+  details.candidates.unshift(chosen);
+  details.selectedCandidateId = chosen.id;
+  const routeLocation = applyDiningRouteLocation('餐饮', details, {});
+
+  const result = await pool.query(
+    `UPDATE itinerary_items
+        SET details = $2::jsonb,
+            location_name = $3,
+            location_uid = $4,
+            location = $5,
+            latitude = $6,
+            longitude = $7,
+            coord_type = $8,
+            updated_at = now()
+      WHERE id = $1
+      RETURNING *`,
+    [
+      id,
+      JSON.stringify(details),
+      routeLocation.locationName,
+      routeLocation.locationUid,
+      routeLocation.location,
+      routeLocation.latitude,
+      routeLocation.longitude,
+      routeLocation.coordType
+    ]
+  );
+  res.json(result.rows[0]);
 });
 
 app.put('/api/days/:dayId/items/order', async (req, res) => {
