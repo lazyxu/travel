@@ -172,49 +172,20 @@ ensure_shell_path() {
   say "已写入 shell PATH：$rc_file"
 }
 
-ensure_immediate_command() {
-  local dir candidate=""
-  local old_ifs="$IFS"
-  IFS=':'
-  for dir in $PATH; do
-    [[ -n "$dir" ]] || dir='.'
-    if [[ -d "$dir" && -w "$dir" ]]; then
-      candidate="$dir/travel-server"
-      if [[ ! -e "$candidate" || -L "$candidate" ]]; then
-        ln -sfn "$MANAGER_PATH" "$candidate" 2>/dev/null || true
-        if [[ -x "$candidate" ]]; then
-          IFS="$old_ifs"
-          say "当前终端已可直接使用：travel-server（$candidate）"
-          return 0
-        fi
-      elif [[ -e "$candidate" ]] && [[ "$candidate" -ef "$MANAGER_PATH" ]]; then
-        IFS="$old_ifs"
-        say "当前终端已可直接使用：travel-server（$candidate）"
-        return 0
-      fi
-    fi
-  done
-  IFS="$old_ifs"
-
-  # /usr/local/bin is the preferred conventional location when writable.
-  if [[ -w /usr/local/bin || "$(id -u)" -eq 0 ]]; then
-    ln -sfn "$MANAGER_PATH" /usr/local/bin/travel-server 2>/dev/null || true
-    if [[ -x /usr/local/bin/travel-server && ":$PATH:" == *":/usr/local/bin:"* ]]; then
-      say '当前终端已可直接使用：travel-server（/usr/local/bin/travel-server）'
-      return 0
-    fi
-  fi
-
-  local rc_file
-  rc_file="$(shell_rc_file)"
-  say "PATH 已永久写入 $rc_file；当前 shell 是父进程，安装脚本无法直接修改它。"
-  say "当前终端执行一次即可立即生效：source '$rc_file'"
-  return 0
-}
 
 configure_shell_command() {
+  local rc_file
   ensure_shell_path
-  ensure_immediate_command
+  rc_file="$(shell_rc_file)"
+
+  if [[ ":$PATH:" == *":$BIN_DIR:"* ]]; then
+    say "当前终端 PATH 已包含：$BIN_DIR"
+    say '现在可直接使用：travel-server'
+  else
+    say '注意：安装/更新脚本是子进程，不能修改当前父 shell 已存在的 PATH。'
+    say "当前终端请手动执行一次：source '$rc_file'"
+    say "执行后即可直接使用：travel-server"
+  fi
 }
 
 write_env_if_missing() {
@@ -409,7 +380,14 @@ show_access() {
   else
     say '百度 POI：未配置（可运行 travel-server baidu-ak set）'
   fi
-  say '管理命令已配置为：travel-server'
+  if [[ ":$PATH:" == *":$BIN_DIR:"* ]]; then
+    say '管理命令：travel-server'
+  else
+    local rc_file
+    rc_file="$(shell_rc_file)"
+    say "当前终端尚需执行：source '$rc_file'"
+    say "或者暂时继续使用：$MANAGER_PATH"
+  fi
 }
 
 backup() {
