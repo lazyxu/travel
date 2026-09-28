@@ -332,22 +332,47 @@ function collectShareSettings() {
 function shareManagerHtml(shares = []) {
   const current = shares[0] || null;
   return `
-    <div class="stack">
-      <div class="share-help">分享页无需登录，只能查看。确认号始终不公开；下面可进一步控制哪些信息对外显示。</div>
-      ${shareSettingsFieldsHtml(current?.settings)}
+    <div class="stack share-manager">
+      <div class="share-help">
+        <strong>只读分享</strong>
+        <span>分享页无需登录，只能查看。确认号始终不公开。</span>
+      </div>
+
       ${current ? `
         <div class="active-share-status">
-          <strong>分享已开启</strong>
+          <div class="active-share-head"><span></span><strong>分享已开启</strong></div>
           <span>创建于 ${escapeHtml(new Date(current.created_at).toLocaleString())}</span>
-          <small>出于安全考虑，服务器只保存 token 哈希，旧链接无法再次显示。若需要重新复制，请重新生成，旧链接会立即失效。</small>
+          <small>服务器只保存链接 token 的哈希。若需要再次复制链接，请重新生成；旧链接会立即失效。</small>
         </div>
-        <button id="save-share-settings" class="button ghost full" type="button">保存分享设置</button>
-        <button id="create-share-link" class="button primary full" type="button">重新生成并废止旧链接</button>
-        <button id="disable-share-link" class="button danger full" type="button" data-share-id="${attr(current.id)}">关闭分享</button>
-      ` : `
-        <button id="create-share-link" class="button primary full" type="button">生成只读分享链接</button>
-      `}
-      <div id="new-share-result"></div>
+      ` : ''}
+
+      <section class="share-manager-section">
+        <div class="share-manager-section-head">
+          <strong>分享内容</strong>
+          <span>选择对方可以看到的信息</span>
+        </div>
+        ${shareSettingsFieldsHtml(current?.settings)}
+        ${current ? '<button id="save-share-settings" class="button ghost full" type="button">保存分享内容</button>' : ''}
+      </section>
+
+      <section class="share-manager-section">
+        <div class="share-manager-section-head">
+          <strong>分享链接</strong>
+          <span>${current ? '重新生成后，旧链接立即失效' : '生成后请立即复制保存'}</span>
+        </div>
+        <button id="create-share-link" class="button primary full" type="button">${current ? '重新生成分享链接' : '生成只读分享链接'}</button>
+        <div id="new-share-result"></div>
+      </section>
+
+      ${current ? `
+        <section class="share-danger-zone">
+          <div>
+            <strong>关闭分享</strong>
+            <span>关闭后，当前分享链接将无法继续访问。</span>
+          </div>
+          <button id="disable-share-link" class="button danger small" type="button" data-share-id="${attr(current.id)}">关闭</button>
+        </section>
+      ` : ''}
     </div>
   `;
 }
@@ -405,7 +430,7 @@ async function openShareManager() {
           await copyText(url);
           showToast('分享链接已复制');
         });
-        button.textContent = '重新生成并废止旧链接';
+        button.textContent = '重新生成分享链接';
         showToast('新的只读分享链接已生成');
       } catch (error) {
         showToast(error.message, 'error');

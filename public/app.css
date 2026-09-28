@@ -2103,3 +2103,109 @@ textarea {
   background: #f1f7f4;
   color: var(--accent);
 }
+
+
+/* 2026-09-28 UI polish: share manager */
+.share-manager {
+  gap: 12px;
+}
+.share-help {
+  display: grid;
+  gap: 3px;
+  padding: 12px 13px;
+  border-radius: 14px;
+  background: #f2f6f3;
+}
+.share-help strong {
+  color: var(--text);
+  font-size: 13px;
+}
+.share-help span {
+  color: #5d675f;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.active-share-status {
+  display: grid;
+  gap: 4px;
+  padding: 12px 13px;
+  border: 1px solid #cfe1da;
+  border-radius: 14px;
+  background: #f6faf8;
+}
+.active-share-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.active-share-head > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(31,111,95,.09);
+}
+.active-share-head strong {
+  font-size: 12px;
+}
+.active-share-status > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.active-share-status small {
+  color: #66706a;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.share-manager-section {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fbfcfa;
+}
+.share-manager-section-head {
+  display: grid;
+  gap: 2px;
+}
+.share-manager-section-head strong {
+  font-size: 12px;
+}
+.share-manager-section-head span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.share-danger-zone {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid #efd9d6;
+  border-radius: 14px;
+  background: #fffafa;
+}
+.share-danger-zone > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.share-danger-zone strong {
+  color: var(--danger);
+  font-size: 12px;
+}
+.share-danger-zone span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.share-created {
+  margin-top: 1px;
+}
+.share-created-help {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
