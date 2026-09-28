@@ -135,6 +135,88 @@ prepare_layout() {
   chmod 700 "$TRAVEL_HOME" "$CONFIG_DIR" "$BIN_DIR" "$DATA_DIR" "$DATA_DIR/uploads" "$BACKUP_DIR" "$STATE_DIR" "$LOG_DIR" || true
 }
 
+shell_rc_file() {
+  local shell_name
+  shell_name="$(basename "${SHELL:-bash}")"
+  case "$shell_name" in
+    bash) printf '%s' "$HOME/.bashrc" ;;
+    zsh) printf '%s' "$HOME/.zshrc" ;;
+    *) printf '%s' "$HOME/.profile" ;;
+  esac
+}
+
+ensure_shell_path() {
+  local rc_file begin end tmp
+  rc_file="$(shell_rc_file)"
+  begin="# >>> travel-server PATH >>>"
+  end="# <<< travel-server PATH <<<"
+
+  mkdir -p "$(dirname "$rc_file")"
+  touch "$rc_file"
+
+  tmp="$(mktemp "$STATE_DIR/.shell-rc.XXXXXX")"
+  awk -v begin="$begin" -v end="$end" '
+    $0 == begin { skipping = 1; next }
+    $0 == end { skipping = 0; next }
+    !skipping { print }
+  ' "$rc_file" > "$tmp"
+
+  {
+    cat "$tmp"
+    printf '\n%s\n' "$begin"
+    printf 'export PATH="%s:$PATH"\n' "$BIN_DIR"
+    printf '%s\n' "$end"
+  } > "$rc_file"
+
+  rm -f "$tmp"
+  say "已写入 shell PATH：$rc_file"
+}
+
+ensure_immediate_command() {
+  local dir candidate=""
+  local old_ifs="$IFS"
+  IFS=':'
+  for dir in $PATH; do
+    [[ -n "$dir" ]] || dir='.'
+    if [[ -d "$dir" && -w "$dir" ]]; then
+      candidate="$dir/travel-server"
+      if [[ ! -e "$candidate" || -L "$candidate" ]]; then
+        ln -sfn "$MANAGER_PATH" "$candidate" 2>/dev/null || true
+        if [[ -x "$candidate" ]]; then
+          IFS="$old_ifs"
+          say "当前终端已可直接使用：travel-server（$candidate）"
+          return 0
+        fi
+      elif [[ "$candidate" -ef "$MANAGER_PATH" 2>/dev/null ]]; then
+        IFS="$old_ifs"
+        say "当前终端已可直接使用：travel-server（$candidate）"
+        return 0
+      fi
+    fi
+  done
+  IFS="$old_ifs"
+
+  # /usr/local/bin is the preferred conventional location when writable.
+  if [[ -w /usr/local/bin || "$(id -u)" -eq 0 ]]; then
+    ln -sfn "$MANAGER_PATH" /usr/local/bin/travel-server 2>/dev/null || true
+    if [[ -x /usr/local/bin/travel-server && ":$PATH:" == *":/usr/local/bin:"* ]]; then
+      say '当前终端已可直接使用：travel-server（/usr/local/bin/travel-server）'
+      return 0
+    fi
+  fi
+
+  local rc_file
+  rc_file="$(shell_rc_file)"
+  say "PATH 已永久写入 $rc_file；当前 shell 是父进程，安装脚本无法直接修改它。"
+  say "当前终端执行一次即可立即生效：source '$rc_file'"
+  return 0
+}
+
+configure_shell_command() {
+  ensure_shell_path
+  ensure_immediate_command
+}
+
 write_env_if_missing() {
   if [[ -f "$ENV_PATH" ]]; then
     return
@@ -327,12 +409,7 @@ show_access() {
   else
     say '百度 POI：未配置（可运行 travel-server baidu-ak set）'
   fi
-  if [[ -w /usr/local/bin || "$(id -u)" -eq 0 ]]; then
-    ln -sf "$MANAGER_PATH" /usr/local/bin/travel-server 2>/dev/null || true
-    [[ -x /usr/local/bin/travel-server ]] && say '已安装命令：travel-server'
-  else
-    say "可选：sudo ln -sf '$MANAGER_PATH' /usr/local/bin/travel-server"
-  fi
+  say '管理命令已配置为：travel-server'
 }
 
 backup() {
@@ -495,6 +572,7 @@ install() {
   ensure_optional_env_defaults
   ensure_upload_layout
   refresh_deploy_files
+  configure_shell_command
   pull_images
   say '启动 travel...'
   compose up -d --remove-orphans
@@ -516,6 +594,7 @@ update() {
   backup
   say '刷新部署文件...'
   refresh_deploy_files
+  configure_shell_command
   ensure_optional_env_defaults
   ensure_upload_layout
   say '部署文件已刷新，开始更新容器镜像...'
