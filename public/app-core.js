@@ -31,6 +31,7 @@ const state = {
   current: null,
   currentDayId: null,
   tab: 'itinerary',
+  sortingDayId: null,
   readonly: false,
   shareToken: ''
 };
@@ -154,6 +155,38 @@ function formatRange(start, end) {
 function weekday(date) {
   const d = new Date(`${String(date).slice(0, 10)}T00:00:00`);
   return ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
+}
+
+function tripStatusMeta(trip, today = localDateKey()) {
+  const start = String(trip?.start_date || '').slice(0, 10);
+  const end = String(trip?.end_date || '').slice(0, 10);
+  if (!start && !end) return { kind: 'undated', label: '未设置日期', progress: null };
+
+  if (start && today < start) {
+    const days = Math.max(0, daysBetween(today, start));
+    return {
+      kind: 'upcoming',
+      label: days === 1 ? '明天出发' : days === 0 ? '今天出发' : `${days} 天后出发`,
+      progress: 0
+    };
+  }
+
+  if (end && today > end) {
+    return { kind: 'past', label: '已结束', progress: 100 };
+  }
+
+  if (start && end && today >= start && today <= end) {
+    const total = Math.max(1, daysBetween(start, end) + 1);
+    const current = Math.min(total, Math.max(1, daysBetween(start, today) + 1));
+    return {
+      kind: 'active',
+      label: `旅行中 · D${current}/${total}`,
+      progress: Math.round((current / total) * 100)
+    };
+  }
+
+  if (start && today >= start) return { kind: 'active', label: '旅行中', progress: null };
+  return { kind: 'upcoming', label: '即将出发', progress: null };
 }
 
 function dayNumber(date, tripStart) {

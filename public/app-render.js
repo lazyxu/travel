@@ -1,6 +1,7 @@
 function renderHome() {
   state.current = null;
   state.currentDayId = null;
+  state.sortingDayId = null;
   el.topbarTitle.textContent = '旅行计划';
   el.backHome.classList.add('hidden');
   el.bottomNav.classList.add('hidden');
@@ -14,16 +15,23 @@ function renderHome() {
       <button id="create-trip" class="button primary small" type="button">＋ 新旅行</button>
     </div>
     <div class="trip-grid">
-      ${state.trips.map(trip => `
-        <article class="trip-card" data-trip-id="${attr(trip.id)}">
-          <h3>${escapeHtml(trip.title)}</h3>
-          <div class="trip-meta">${trip.destination ? `${escapeHtml(trip.destination)} · ` : ''}${escapeHtml(formatRange(trip.start_date, trip.end_date))}</div>
-          <div class="trip-stats">
-            <span class="pill">⌁ ${trip.item_count} 项行程</span>
-            <span class="pill">✓ ${trip.todo_count} 项待办</span>
-          </div>
-        </article>
-      `).join('')}
+      ${state.trips.map(trip => {
+        const status = tripStatusMeta(trip);
+        return `
+          <article class="trip-card trip-card-${status.kind}" data-trip-id="${attr(trip.id)}" role="button" tabindex="0" aria-label="打开旅行：${attr(trip.title)}">
+            <div class="trip-card-head">
+              <h3>${escapeHtml(trip.title)}</h3>
+              <span class="trip-status trip-status-${status.kind}">${escapeHtml(status.label)}</span>
+            </div>
+            <div class="trip-meta">${trip.destination ? `${escapeHtml(trip.destination)} · ` : ''}${escapeHtml(formatRange(trip.start_date, trip.end_date))}</div>
+            ${status.kind === 'active' && status.progress !== null ? `<div class="trip-progress" aria-label="旅行进度 ${status.progress}%"><i style="width: ${status.progress}%"></i></div>` : ''}
+            <div class="trip-stats">
+              <span class="pill">⌁ ${trip.item_count} 项行程</span>
+              <span class="pill">✓ ${trip.todo_count} 项待办</span>
+            </div>
+          </article>
+        `;
+      }).join('')}
     </div>
     ${state.trips.length ? '' : `
       <div class="empty-state">
@@ -36,7 +44,13 @@ function renderHome() {
 
   el.main.querySelector('#create-trip').addEventListener('click', () => openTripForm());
   el.main.querySelectorAll('[data-trip-id]').forEach(card => {
-    card.addEventListener('click', () => navigate(`/trips/${card.dataset.tripId}`));
+    const open = () => navigate(`/trips/${card.dataset.tripId}`);
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      open();
+    });
   });
 }
 
@@ -106,10 +120,11 @@ function renderItinerary() {
         </div>
         <div class="section-actions">
           ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}">${escapeHtml(dayRouteLabel(day))}</a>` : ''}
+          ${day.items?.length ? `<button id="toggle-sort" class="button ghost small ${String(state.sortingDayId) === String(day.id) ? 'active' : ''}" type="button">${String(state.sortingDayId) === String(day.id) ? '完成排序' : '调整顺序'}</button>` : ''}
           <button id="edit-day" class="button ghost small" type="button">编辑当天</button>
         </div>
       </div>
-      <div class="timeline">
+      <div class="timeline ${String(state.sortingDayId) === String(day.id) ? 'reorder-mode' : ''}">
         ${dayDisplayItems(day).length ? dayTimelineHtml(day) : `
           <div class="empty-state">
             <div class="empty-icon">＋</div>
@@ -148,6 +163,10 @@ function renderItinerary() {
   if (day) {
     el.main.querySelector('#edit-day').addEventListener('click', () => openDayForm(day));
     el.main.querySelector('#add-item').addEventListener('click', () => openItemForm(day));
+    el.main.querySelector('#toggle-sort')?.addEventListener('click', () => {
+      state.sortingDayId = String(state.sortingDayId) === String(day.id) ? null : day.id;
+      renderItinerary();
+    });
     bindItinerarySorting(day);
     bindItineraryActions(day);
     el.main.querySelectorAll('[data-choose-dining]').forEach(button => {
@@ -248,7 +267,12 @@ function hotelStayAnchorHtml(item, { readonly = false } = {}) {
         <div class="timeline-top">
           <span class="category"><span class="category-icon">🏨</span>${roleLabel}</span>
           ${readonly ? '' : `<div class="card-actions">
-            <button class="card-action" type="button" data-edit-item="${attr(item.id)}">编辑酒店</button>
+            <details class="item-action-menu">
+              <summary class="card-more" aria-label="更多操作">•••</summary>
+              <div class="item-action-popover">
+                <button type="button" data-edit-item="${attr(item.id)}">编辑酒店</button>
+              </div>
+            </details>
           </div>`}
         </div>
         <h3>${escapeHtml(hotelName)}</h3>
@@ -273,9 +297,14 @@ function itemCardHtml(item, { readonly = false } = {}) {
         <div class="timeline-top">
           <span class="category"><span class="category-icon" aria-hidden="true">${category.icon}</span>${escapeHtml(category.label)}</span>
           ${readonly ? '' : `<div class="card-actions">
-            ${item.details?.kind === 'dining' && item.details?.candidates?.length ? `<button class="card-action" type="button" data-choose-dining="${attr(item.id)}">选餐厅</button>` : ''}
             <button class="drag-handle" type="button" data-drag-handle aria-label="拖动排序">⋮⋮</button>
-            <button class="card-action" type="button" data-edit-item="${attr(item.id)}" aria-label="编辑">编辑</button>
+            <details class="item-action-menu">
+              <summary class="card-more" aria-label="更多操作">•••</summary>
+              <div class="item-action-popover">
+                ${item.details?.kind === 'dining' && item.details?.candidates?.length ? `<button type="button" data-choose-dining="${attr(item.id)}">选择餐厅</button>` : ''}
+                <button type="button" data-edit-item="${attr(item.id)}">编辑行程</button>
+              </div>
+            </details>
           </div>`}
         </div>
         <h3>${escapeHtml(item.title)}</h3>

@@ -1,17 +1,45 @@
 function legControlHtml(day, fromItem, toItem, { readonly = false } = {}) {
   const mode = legMode(day, fromItem, toItem);
-  const meta = {
+  const modes = {
     driving: { icon: '🚕', label: '驾车' },
     walking: { icon: '🚶', label: '步行' },
     transit: { icon: '🚇', label: '公交' }
-  }[mode] || { icon: '🚕', label: '驾车' };
+  };
+  const meta = modes[mode] || modes.driving;
   const mapUrl = baiduLegUrl(fromItem, toItem, mode);
+  const fromKey = itemRouteKey(fromItem);
+  const toKey = itemRouteKey(toItem);
 
   if (readonly) {
-    return `<div class="leg-control readonly"><span class="leg-line"></span><span class="leg-mode-label">${meta.icon} ${escapeHtml(meta.label)}</span>${mapUrl ? `<a class="leg-map-link" href="${attr(mapUrl)}">百度地图 App ↗</a>` : ''}</div>`;
+    return `
+      <div class="leg-control readonly">
+        <span class="leg-line"></span>
+        <span class="leg-route-chip static">${meta.icon}<strong>${escapeHtml(meta.label)}</strong></span>
+        ${mapUrl ? `<a class="leg-map-link" href="${attr(mapUrl)}" aria-label="在百度地图打开这段路线">路线 ↗</a>` : '<span class="leg-map-unavailable">未定位</span>'}
+      </div>
+    `;
   }
 
-  return `<div class="leg-control" data-leg-drop data-from-key="${attr(itemRouteKey(fromItem))}" data-to-key="${attr(itemRouteKey(toItem))}"><span class="leg-line"></span><select data-leg-mode data-from-key="${attr(itemRouteKey(fromItem))}" data-to-key="${attr(itemRouteKey(toItem))}" aria-label="两站之间交通方式"><option value="driving" ${mode === 'driving' ? 'selected' : ''}>🚕 驾车</option><option value="walking" ${mode === 'walking' ? 'selected' : ''}>🚶 步行</option><option value="transit" ${mode === 'transit' ? 'selected' : ''}>🚇 公交</option></select>${mapUrl ? `<a class="leg-map-link" href="${attr(mapUrl)}">百度地图 App ↗</a>` : ''}</div>`;
+  return `
+    <div class="leg-control" data-leg-drop data-from-key="${attr(fromKey)}" data-to-key="${attr(toKey)}">
+      <span class="leg-line"></span>
+      <details class="leg-mode-menu">
+        <summary class="leg-route-chip" aria-label="修改交通方式">${meta.icon}<strong>${escapeHtml(meta.label)}</strong><span>⌄</span></summary>
+        <div class="leg-mode-options">
+          ${Object.entries(modes).map(([value, option]) => `
+            <button type="button"
+                    class="${value === mode ? 'active' : ''}"
+                    data-leg-mode-value="${value}"
+                    data-from-key="${attr(fromKey)}"
+                    data-to-key="${attr(toKey)}">
+              <span>${option.icon}</span><strong>${escapeHtml(option.label)}</strong>${value === mode ? '<em>当前</em>' : ''}
+            </button>
+          `).join('')}
+        </div>
+      </details>
+      ${mapUrl ? `<a class="leg-map-link" href="${attr(mapUrl)}" aria-label="在百度地图打开这段路线">路线 ↗</a>` : '<span class="leg-map-unavailable">未定位</span>'}
+    </div>
+  `;
 }
 
 function dayTimelineHtml(day, { readonly = false } = {}) {
@@ -71,23 +99,24 @@ function tripExpenseSummaryHtml() {
 }
 
 async function bindItineraryActions(day) {
-  el.main.querySelectorAll('[data-leg-mode]').forEach(select => {
-    select.addEventListener('change', async () => {
-      select.disabled = true;
+  el.main.querySelectorAll('[data-leg-mode-value]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const group = button.closest('[data-leg-drop]');
+      group?.querySelectorAll('[data-leg-mode-value]').forEach(node => { node.disabled = true; });
       try {
         const result = await api(`/api/days/${day.id}/leg-mode`, {
           method: 'PUT',
           body: JSON.stringify({
-            fromKey: select.dataset.fromKey,
-            toKey: select.dataset.toKey,
-            mode: select.value
+            fromKey: button.dataset.fromKey,
+            toKey: button.dataset.toKey,
+            mode: button.dataset.legModeValue
           })
         });
         day.leg_modes = result.legModes || {};
         renderItinerary();
       } catch (error) {
         showToast(error.message, 'error');
-        select.disabled = false;
+        group?.querySelectorAll('[data-leg-mode-value]').forEach(node => { node.disabled = false; });
       }
     });
   });
