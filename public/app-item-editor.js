@@ -1,6 +1,6 @@
 const ITEM_EDITOR_TYPES = {
   attraction: { label: '景点', icon: '📍', category: '景点', kind: '' },
-  dining: { label: '餐饮', icon: '🍜', category: '餐饮', kind: '' },
+  dining: { label: '餐饮', icon: '🍜', category: '餐饮', kind: 'dining' },
   shopping: { label: '购物', icon: '🛍️', category: '购物', kind: '' },
   lodging: { label: '酒店', icon: '🏨', category: '住宿', kind: 'lodging' },
   flight: { label: '航班', icon: '✈️', category: '交通', kind: 'flight' },
@@ -14,6 +14,7 @@ function itemEditorTypeFor(item = {}) {
   if (kind === 'lodging') return 'lodging';
   if (kind === 'flight') return 'flight';
   if (kind === 'train') return 'train';
+  if (kind === 'dining') return 'dining';
   if (item.category === '景点') return 'attraction';
   if (item.category === '餐饮') return 'dining';
   if (item.category === '购物') return 'shopping';
@@ -64,6 +65,12 @@ function itemEditorDetailsSummary(typeValue, details = {}) {
     const route = [details.departureStation, details.arrivalStation].filter(Boolean).join(' → ');
     return [details.trainNo, route].filter(Boolean).join(' · ') || '添加车次、车站、座位等';
   }
+  if (typeValue === 'dining') {
+    const candidates = Array.isArray(details.candidates) ? details.candidates : [];
+    const selected = candidates.find(candidate => candidate.id === details.selectedCandidateId);
+    if (!candidates.length) return '添加多家候选餐厅，到时再选';
+    return `${candidates.length} 家候选 · 路线按 ${candidates[0]?.name || '第1家'}${selected ? ` · 已选 ${selected.name}` : ''}`;
+  }
   return '';
 }
 
@@ -113,6 +120,22 @@ function applyAnalyzedLocationToItemForm(mainForm, result) {
     hasLocation,
     hasLocation ? '编辑' : '添加'
   );
+}
+
+function applyDiningFirstCandidateToItemForm(mainForm, details) {
+  const first = Array.isArray(details?.candidates) ? details.candidates[0] : null;
+  if (!first) return;
+  applyAnalyzedLocationToItemForm(mainForm, {
+    type: 'location',
+    location: {
+      name: first.name || '',
+      address: first.address || '',
+      uid: first.locationUid || '',
+      latitude: first.latitude ?? null,
+      longitude: first.longitude ?? null,
+      coordType: first.coordType || 'bd09ll'
+    }
+  });
 }
 
 function itemEditorNoteSummary(note = '') {
@@ -199,6 +222,7 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
       : '可粘贴华住会、携程等预订链接自动分析';
     return `
       <div class="stack">
+        <button class="button ghost full structured-import-button" type="button" data-analyze-order>📋 粘贴酒店订单 / 确认短信自动解析</button>
         <label class="field"><span>酒店名称</span><input name="hotelName" maxlength="160" value="${attr(details.hotelName || '')}" /></label>
         <div class="booking-analysis-card ${details.bookingUrl ? 'active' : ''}">
           <div class="item-addon-icon">🔗</div>
@@ -232,6 +256,7 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
   if (kind === 'flight') {
     return `
       <div class="stack">
+        <button class="button ghost full structured-import-button" type="button" data-analyze-order>📋 粘贴航班订单 / 确认短信自动解析</button>
         <div class="field-grid">
           <label class="field"><span>航空公司</span><input name="airline" maxlength="160" value="${attr(details.airline || '')}" /></label>
           <label class="field"><span>航班号</span><input name="flightNo" maxlength="40" value="${attr(details.flightNo || '')}" /></label>
@@ -261,8 +286,26 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
     `;
   }
 
+  if (kind === 'dining') {
+    const candidates = Array.isArray(details.candidates) ? details.candidates : [];
+    return `
+      <div class="stack dining-candidate-manager" data-dining-manager>
+        <input name="diningCandidatesJson" type="hidden" value="${attr(JSON.stringify(candidates))}" />
+        <input name="selectedCandidateId" type="hidden" value="${attr(details.selectedCandidateId || '')}" />
+        <div class="dining-manager-help">
+          <strong>候选餐厅</strong>
+          <span>可添加最多 8 家并拖动排序；列表第 1 家始终作为路线定位。点“选这家”会自动移到第 1 位。</span>
+        </div>
+        <div class="dining-candidate-list" data-dining-list></div>
+        <button class="button ghost full" type="button" data-add-dining>＋ 添加候选餐厅链接</button>
+        <button class="button primary full" type="submit">完成</button>
+      </div>
+    `;
+  }
+
   return `
     <div class="stack">
+      <button class="button ghost full structured-import-button" type="button" data-analyze-order>📋 粘贴高铁 / 火车订单或短信自动解析</button>
       <label class="field"><span>车次</span><input name="trainNo" maxlength="40" value="${attr(details.trainNo || '')}" /></label>
       <div class="field-grid">
         <label class="field"><span>出发日期</span><input name="departureDate" type="date" value="${attr(details.departureDate || '')}" /></label>
@@ -286,6 +329,13 @@ function itemEditorDetailsFormHtml(kind, details = {}) {
 
 function itemEditorCollectDetails(kind, formData) {
   const value = name => String(formData.get(name) || '').trim();
+  if (kind === 'dining') {
+    return {
+      kind,
+      selectedCandidateId: value('selectedCandidateId'),
+      candidates: safeJsonParse(formData.get('diningCandidatesJson'), [])
+    };
+  }
   if (kind === 'lodging') {
     return {
       kind,
@@ -331,6 +381,172 @@ function itemEditorCollectDetails(kind, formData) {
     seat: value('seat'),
     confirmationNo: value('confirmationNo')
   };
+}
+
+function diningCandidateFromAnalysis(result) {
+  const place = result?.location || result?.place || {};
+  const reference = result?.reference || {};
+  const value = result?.value || reference.value || reference.url || '';
+  const name = place.name || reference.customTitle || reference.autoTitle || reference.title || '候选餐厅';
+  return {
+    id: 'candidate-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
+    name,
+    address: place.address || '',
+    locationUid: place.uid || place.locationUid || '',
+    latitude: place.latitude ?? null,
+    longitude: place.longitude ?? null,
+    coordType: place.coordType || 'bd09ll',
+    sourceUrl: /^https?:\/\//i.test(value) ? value : '',
+    sourceTitle: reference.customTitle || reference.autoTitle || reference.title || '',
+    sourcePlatform: reference.platform || (result.type === 'location' ? 'baidu' : detectReferencePlatform(value)),
+    appUrl: reference.appUrl || ''
+  };
+}
+
+function diningCandidateCardHtml(candidate, index, selectedId = '') {
+  const selected = candidate.id === selectedId;
+  const located = candidate.latitude !== null && candidate.latitude !== undefined
+    && candidate.longitude !== null && candidate.longitude !== undefined;
+  const platform = candidate.sourcePlatform ? referencePlatformMeta(candidate.sourcePlatform) : null;
+  return `
+    <div class="dining-candidate-card ${selected ? 'selected' : ''}" data-dining-candidate data-candidate-id="${attr(candidate.id)}" data-index="${index}">
+      <button class="dining-drag-handle" type="button" data-dining-drag aria-label="拖动排序">⋮⋮</button>
+      <div class="dining-candidate-rank">${index + 1}</div>
+      <div class="dining-candidate-copy">
+        <strong>${escapeHtml(candidate.name || '候选餐厅')}</strong>
+        <span>${escapeHtml(candidate.address || (located ? '已定位' : '未定位'))}</span>
+        <small>${index === 0 ? '📍 路线定位' : ''}${index === 0 && platform ? ' · ' : ''}${platform ? platform.label : ''}${selected ? ' · ✓ 已选' : ''}</small>
+      </div>
+      <div class="dining-candidate-actions">
+        <button class="button ghost small" type="button" data-select-dining>${selected ? '已选择' : '选这家'}</button>
+        <button class="button ghost small" type="button" data-edit-dining>编辑</button>
+        <button class="reference-remove" type="button" data-remove-dining aria-label="删除候选餐厅">×</button>
+      </div>
+    </div>
+  `;
+}
+
+function bindDiningCandidateManager(root) {
+  const manager = root.querySelector('[data-dining-manager]');
+  if (!manager) return;
+  const list = manager.querySelector('[data-dining-list]');
+  const candidatesInput = manager.querySelector('[name="diningCandidatesJson"]');
+  const selectedInput = manager.querySelector('[name="selectedCandidateId"]');
+  let candidates = safeJsonParse(candidatesInput.value, []);
+
+  const render = () => {
+    candidatesInput.value = JSON.stringify(candidates);
+    const selectedId = selectedInput.value || '';
+    list.innerHTML = candidates.length
+      ? candidates.map((candidate, index) => diningCandidateCardHtml(candidate, index, selectedId)).join('')
+      : '<div class="reference-editor-empty">还没有候选餐厅</div>';
+  };
+
+  const applyCandidate = (result, existingId = '') => {
+    const next = diningCandidateFromAnalysis(result);
+    if (existingId) {
+      const index = candidates.findIndex(candidate => candidate.id === existingId);
+      if (index >= 0) next.id = existingId, candidates[index] = next;
+    } else {
+      if (candidates.length >= 8) return showToast('最多 8 家候选餐厅', 'error');
+      candidates.push(next);
+    }
+    root.dataset.dirty = '1';
+    render();
+  };
+
+  manager.addEventListener('click', event => {
+    if (event.target.closest('[data-add-dining]')) {
+      openLinkAnalyzer({
+        context: 'dining',
+        title: '添加候选餐厅',
+        onApply: result => applyCandidate(result)
+      });
+      return;
+    }
+
+    const card = event.target.closest('[data-dining-candidate]');
+    if (!card) return;
+    const id = card.dataset.candidateId;
+    const index = candidates.findIndex(candidate => candidate.id === id);
+    if (index < 0) return;
+
+    if (event.target.closest('[data-remove-dining]')) {
+      candidates.splice(index, 1);
+      if (selectedInput.value === id) selectedInput.value = '';
+      root.dataset.dirty = '1';
+      render();
+      return;
+    }
+
+    if (event.target.closest('[data-select-dining]')) {
+      const [chosen] = candidates.splice(index, 1);
+      candidates.unshift(chosen);
+      selectedInput.value = chosen.id;
+      root.dataset.dirty = '1';
+      render();
+      return;
+    }
+
+    if (event.target.closest('[data-edit-dining]')) {
+      const current = candidates[index];
+      openLinkAnalyzer({
+        context: 'dining',
+        initial: {
+          value: current.sourceUrl || '',
+          customTitle: current.sourceTitle || current.name || '',
+          autoTitle: current.sourceTitle || '',
+          platform: current.sourcePlatform || '',
+          appUrl: current.appUrl || ''
+        },
+        title: '编辑候选餐厅',
+        onApply: result => applyCandidate(result, id)
+      });
+    }
+  });
+
+  manager.addEventListener('pointerdown', event => {
+    const handle = event.target.closest('[data-dining-drag]');
+    if (!handle) return;
+    const card = handle.closest('[data-dining-candidate]');
+    const sourceIndex = Number(card?.dataset.index);
+    if (!Number.isInteger(sourceIndex)) return;
+    event.preventDefault();
+    try { handle.setPointerCapture?.(event.pointerId); } catch {}
+    card.classList.add('dining-candidate-dragging');
+    let targetIndex = sourceIndex;
+
+    const move = moveEvent => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      moveEvent.preventDefault();
+      const target = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY)?.closest?.('[data-dining-candidate]');
+      if (!target || !manager.contains(target)) return;
+      const index = Number(target.dataset.index);
+      if (!Number.isInteger(index)) return;
+      targetIndex = index;
+      list.querySelectorAll('[data-dining-candidate]').forEach(node => node.classList.toggle('dining-candidate-drop', Number(node.dataset.index) === index));
+    };
+
+    const finish = upEvent => {
+      if (upEvent.pointerId !== event.pointerId) return;
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', finish, true);
+      window.removeEventListener('pointercancel', finish, true);
+      try { handle.releasePointerCapture?.(event.pointerId); } catch {}
+      if (upEvent.type !== 'pointercancel' && sourceIndex !== targetIndex) {
+        const [moved] = candidates.splice(sourceIndex, 1);
+        candidates.splice(targetIndex, 0, moved);
+        root.dataset.dirty = '1';
+      }
+      render();
+    };
+
+    window.addEventListener('pointermove', move, { capture: true, passive: false });
+    window.addEventListener('pointerup', finish, true);
+    window.addEventListener('pointercancel', finish, true);
+  });
+
+  render();
 }
 
 function bindReferenceEditorWithin(root, mainForm) {
@@ -784,6 +1000,7 @@ function bindCompactItemEditor(mainForm, item) {
         const detailSubForm = openItemSubsheet(`${meta.icon} ${meta.label}信息`, itemEditorDetailsFormHtml(meta.kind, current), async data => {
           const next = itemEditorCollectDetails(meta.kind, data);
           detailsInput.value = JSON.stringify(next);
+          if (meta.kind === 'dining') applyDiningFirstCandidateToItemForm(mainForm, next);
 
           const titleInput = mainForm.querySelector('[name="title"]');
           const startInput = mainForm.querySelector('[name="startTime"]');
@@ -806,6 +1023,30 @@ function bindCompactItemEditor(mainForm, item) {
           updateCompactItemAddon(mainForm, 'details', itemEditorDetailsSummary(typeSelect.value, next), true, '编辑');
           closeItemSubsheet(true);
         });
+
+        if (meta.kind === 'dining') {
+          bindDiningCandidateManager(detailSubForm);
+        }
+
+        if (['lodging', 'flight', 'train'].includes(meta.kind)) {
+          detailSubForm.querySelector('[data-analyze-order]')?.addEventListener('click', () => {
+            const selectedDayId = mainForm.querySelector('[name="targetDayId"]')?.value || '';
+            const selectedDay = state.current.days.find(day => String(day.id) === String(selectedDayId));
+            openOrderAnalyzer({
+              kind: meta.kind,
+              anchorDate: String(selectedDay?.day_date || state.current.trip.start_date || '').slice(0, 10),
+              title: meta.kind === 'lodging' ? '解析酒店订单 / 短信' : meta.kind === 'flight' ? '解析航班订单 / 短信' : '解析高铁 / 火车订单',
+              onApply: details => {
+                for (const [key, value] of Object.entries(details || {})) {
+                  if (key === 'kind') continue;
+                  const input = detailSubForm.querySelector(`[name="${key}"]`);
+                  if (input && value !== undefined && value !== null && String(value) !== '') input.value = value;
+                }
+                detailSubForm.dataset.dirty = '1';
+              }
+            });
+          });
+        }
 
         if (meta.kind === 'lodging') {
           detailSubForm.querySelector('[data-analyze-booking]')?.addEventListener('click', () => {
