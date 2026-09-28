@@ -280,6 +280,9 @@ function itemCardHtml(item, { readonly = false } = {}) {
           <div class="link-row">
             ${links.map(link => {
               const action = referenceActionMeta(link);
+              if (action.type === 'wechat-copy-open') {
+                return `<button class="link-chip generic platform-wechat" type="button" data-copy-open-wechat="${attr(action.value)}">${escapeHtml(action.label)}</button>`;
+              }
               if (action.type === 'copy') {
                 return `<button class="link-chip generic platform-${attr(action.platform)}" type="button" data-copy-reference="${attr(action.value)}">${escapeHtml(action.label)}</button>`;
               }
@@ -375,6 +378,24 @@ function bindHero() {
 
 function bindReferenceActions() {
   bindImageViewerActions();
+
+  el.main.querySelectorAll('[data-copy-open-wechat]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const value = button.dataset.copyOpenWechat || '';
+      if (!value) return;
+      try {
+        await copyText(value);
+        showToast('小程序口令已复制，正在打开微信');
+      } catch {
+        showToast('复制小程序口令失败', 'error');
+        return;
+      }
+      if (!isWeChatBrowser()) {
+        setTimeout(() => { window.location.href = 'weixin://'; }, 80);
+      }
+    });
+  });
+
   el.main.querySelectorAll('[data-open-wechat-scheme]').forEach(button => {
     button.addEventListener('click', async () => {
       const value = button.dataset.openWechatScheme || '';

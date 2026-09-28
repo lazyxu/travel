@@ -12,7 +12,7 @@ function escapeRe(value) {
 
 function labeled(text, labels, max = 160) {
   const pattern = labels.map(escapeRe).join('|');
-  const match = text.match(new RegExp('(?:^|\\n)(?:' + pattern + ')\\s*[:：]?\\s*([^\\n]+)', 'i'));
+  const match = text.match(new RegExp('(?:^|\\n)(?:' + pattern + ')(?:\\s*[:：]\\s*|\\s+)([^\\n]+)', 'i'));
   return clean(match?.[1] || '').slice(0, max);
 }
 

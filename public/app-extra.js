@@ -381,10 +381,10 @@ function referenceEditorHtml(refs = []) {
   return `
     <div class="reference-editor" data-reference-editor>
       <div class="reference-editor-list" data-reference-list>
-        ${list.length ? list.map(referenceEditorRowHtml).join('') : '<div class="reference-editor-empty" data-reference-empty>还没有参考链接</div>'}
+        ${list.length ? list.map(referenceEditorRowHtml).join('') : '<div class="reference-editor-empty" data-reference-empty>还没有链接</div>'}
       </div>
       <button class="button ghost small" type="button" data-add-reference>＋ 添加链接</button>
-      <p class="form-help">每个链接都会先自动分析平台和标题，再由你确认或修改；百度地图链接会自动识别为地点。</p>
+      <p class="form-help">每个链接都会先自动分析平台和标题，再由你确认或修改；百度地图链接会自动识别为位置。</p>
     </div>
   `;
 }

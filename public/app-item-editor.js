@@ -579,7 +579,7 @@ function bindReferenceEditorWithin(root, mainForm) {
       if (existingRow) existingRow.remove();
       root.dataset.dirty = '1';
       syncEmpty();
-      showToast('已识别为百度地图位置，并添加到“地点”');
+      showToast('已识别为位置，并添加到“位置”');
       return;
     }
 
@@ -906,8 +906,8 @@ function compactItemFormHtml(item = {}, currentDayId = state.currentDayId) {
         ${itemEditorAddonHtml({
           id: 'location',
           icon: '📍',
-          title: '地点',
-          summary: hasLocation ? [item.location_name, item.location].filter(Boolean).join(' · ') : '未添加地点',
+          title: '位置',
+          summary: hasLocation ? [item.location_name, item.location].filter(Boolean).join(' · ') : '未添加位置',
           active: hasLocation,
           action: hasLocation ? '编辑' : '添加'
         })}
@@ -922,7 +922,7 @@ function compactItemFormHtml(item = {}, currentDayId = state.currentDayId) {
         ${itemEditorAddonHtml({
           id: 'references',
           icon: '🔗',
-          title: '参考入口',
+          title: '链接',
           summary: itemEditorReferenceSummary(references),
           active: references.length > 0,
           action: references.length ? '管理' : '添加'
@@ -1108,9 +1108,9 @@ function bindCompactItemEditor(mainForm, item) {
         openLinkAnalyzer({
           context: 'location',
           initial: current,
-          title: current.location.name || current.location.address ? '编辑地点' : '添加地点',
+          title: current.location.name || current.location.address ? '编辑位置' : '添加位置',
           onApply: result => {
-            if (result.type !== 'location') throw new Error('这个链接没有识别为百度地图位置');
+            if (result.type !== 'location') throw new Error('这个链接没有识别为位置');
             applyAnalyzedLocationToItemForm(mainForm, result);
           }
         });
@@ -1141,7 +1141,7 @@ function bindCompactItemEditor(mainForm, item) {
 
       if (id === 'references') {
         const current = safeJsonParse(mainForm.querySelector('[name="referencesJson"]').value, []);
-        const subForm = openItemSubsheet('🔗 参考入口', `
+        const subForm = openItemSubsheet('🔗 链接', `
           <div class="stack">
             ${referenceEditorHtml(current)}
             <button class="button primary full" type="submit">完成</button>

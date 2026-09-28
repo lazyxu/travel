@@ -249,6 +249,14 @@ function referenceActionMeta(link) {
   const meta = referencePlatformMeta(platform);
 
   if (link?.kind === 'copy') {
+    if (platform === 'wechat') {
+      return {
+        type: 'wechat-copy-open',
+        platform,
+        label: `${meta.icon} ${link.title || meta.label} · 复制口令并打开微信`,
+        value: link.value || ''
+      };
+    }
     return { type: 'copy', platform, label: `${meta.icon} ${link.title || meta.label} · 复制口令`, value: link.value || '' };
   }
 
