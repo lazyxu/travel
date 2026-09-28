@@ -8,6 +8,7 @@ import {
   enumerateDates,
   httpError,
   normalizeTime,
+  normalizeUrlList,
   optionalUrl,
   requiredText,
   toBoolean,
@@ -95,7 +96,7 @@ async function getTripAggregate(id) {
     ),
     pool.query(
       `SELECT i.id, i.day_id, i.item_time, i.category, i.title, i.location, i.notes,
-              i.xhs_url, i.dianping_url, i.position, i.created_at, i.updated_at
+              i.xhs_url, i.dianping_url, i.image_urls, i.position, i.created_at, i.updated_at
          FROM itinerary_items i
          JOIN trip_days d ON d.id = i.day_id
         WHERE d.trip_id = $1
@@ -274,13 +275,14 @@ app.post('/api/days/:dayId/items', async (req, res) => {
   const notes = cleanText(req.body?.notes, 5000);
   const xhsUrl = optionalUrl(req.body?.xhsUrl, '小红书链接');
   const dianpingUrl = optionalUrl(req.body?.dianpingUrl, '大众点评链接');
+  const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
   const result = await pool.query(
-    `INSERT INTO itinerary_items (day_id, item_time, category, title, location, notes, xhs_url, dianping_url, position)
-     SELECT $1, $2, $3, $4, $5, $6, $7, $8,
+    `INSERT INTO itinerary_items (day_id, item_time, category, title, location, notes, xhs_url, dianping_url, image_urls, position)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9,
             COALESCE((SELECT MAX(position) + 1 FROM itinerary_items WHERE day_id = $1), 0)
      WHERE EXISTS (SELECT 1 FROM trip_days WHERE id = $1)
      RETURNING *`,
-    [dayId, itemTime, category, title, location, notes, xhsUrl, dianpingUrl]
+    [dayId, itemTime, category, title, location, notes, xhsUrl, dianpingUrl, imageUrls]
   );
   if (!result.rowCount) throw httpError(404, '日期不存在');
   res.status(201).json(result.rows[0]);
@@ -295,12 +297,13 @@ app.put('/api/items/:id', async (req, res) => {
   const notes = cleanText(req.body?.notes, 5000);
   const xhsUrl = optionalUrl(req.body?.xhsUrl, '小红书链接');
   const dianpingUrl = optionalUrl(req.body?.dianpingUrl, '大众点评链接');
+  const imageUrls = normalizeUrlList(req.body?.imageUrls || [], '图片链接', 12);
   const result = await pool.query(
     `UPDATE itinerary_items
         SET item_time = $2, category = $3, title = $4, location = $5, notes = $6,
-            xhs_url = $7, dianping_url = $8, updated_at = now()
+            xhs_url = $7, dianping_url = $8, image_urls = $9, updated_at = now()
       WHERE id = $1 RETURNING *`,
-    [id, itemTime, category, title, location, notes, xhsUrl, dianpingUrl]
+    [id, itemTime, category, title, location, notes, xhsUrl, dianpingUrl, imageUrls]
   );
   if (!result.rowCount) throw httpError(404, '行程项不存在');
   res.json(result.rows[0]);
