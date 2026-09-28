@@ -10,7 +10,7 @@ BACKUP_DIR="$TRAVEL_HOME/backups"
 STATE_DIR="$TRAVEL_HOME/state"
 LOG_DIR="$TRAVEL_HOME/logs"
 mkdir -p "$LOG_DIR" 2>/dev/null || true
-RUN_ID="$(date '+%Y%m%d-%H%M%S')-$"
+RUN_ID="$(date '+%Y%m%d-%H%M%S')-$$"
 LOG_FILE="${TRAVEL_LOG_FILE:-$LOG_DIR/travel-server-$RUN_ID.log}"
 HTTP_CONNECT_TIMEOUT="${TRAVEL_HTTP_CONNECT_TIMEOUT:-15}"
 HTTP_MAX_TIME="${TRAVEL_HTTP_MAX_TIME:-60}"
