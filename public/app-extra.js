@@ -99,7 +99,7 @@ function tripExpenseSummaryHtml() {
 }
 
 async function bindDisclosureMenus(root = el.main) {
-  const menus = [...root.querySelectorAll('.item-action-menu, .leg-mode-menu')];
+  const menus = [...root.querySelectorAll('.item-action-menu, .leg-mode-menu, .day-action-menu')];
   menus.forEach(menu => {
     menu.addEventListener('toggle', () => {
       if (!menu.open) return;

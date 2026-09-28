@@ -123,8 +123,17 @@ function renderItinerary() {
         </div>
         <div class="section-actions">
           ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}">${escapeHtml(dayRouteLabel(day))}</a>` : ''}
-          ${day.items?.length ? `<button id="toggle-sort" class="button ghost small ${String(state.sortingDayId) === String(day.id) ? 'active' : ''}" type="button">${String(state.sortingDayId) === String(day.id) ? '完成排序' : '调整顺序'}</button>` : ''}
-          <button id="edit-day" class="button ghost small" type="button">编辑当天</button>
+          ${String(state.sortingDayId) === String(day.id) ? `
+            <button id="toggle-sort" class="button ghost small active" type="button">完成排序</button>
+          ` : `
+            <details class="item-action-menu day-action-menu">
+              <summary class="card-more day-more" aria-label="当天更多操作">•••</summary>
+              <div class="item-action-popover">
+                ${day.items?.length ? '<button id="toggle-sort" type="button">调整顺序</button>' : ''}
+                <button id="edit-day" type="button">编辑当天</button>
+              </div>
+            </details>
+          `}
         </div>
       </div>
       <div class="timeline ${String(state.sortingDayId) === String(day.id) ? 'reorder-mode' : ''}">
@@ -165,7 +174,7 @@ function renderItinerary() {
     });
   });
   if (day) {
-    el.main.querySelector('#edit-day').addEventListener('click', () => openDayForm(day));
+    el.main.querySelector('#edit-day')?.addEventListener('click', () => openDayForm(day));
     el.main.querySelector('#add-item').addEventListener('click', () => openItemForm(day));
     el.main.querySelector('#toggle-sort')?.addEventListener('click', () => {
       state.sortingDayId = String(state.sortingDayId) === String(day.id) ? null : day.id;

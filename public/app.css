@@ -2085,3 +2085,21 @@ textarea {
     padding-inline: 4px;
   }
 }
+
+
+/* 2026-09-28 UI polish: compact day actions */
+.day-action-menu {
+  position: relative;
+}
+.day-more {
+  width: 38px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+}
+.day-action-menu[open] .day-more {
+  border-color: #b9d5cd;
+  background: #f1f7f4;
+  color: var(--accent);
+}
