@@ -105,12 +105,15 @@ function renderItinerary() {
     ${heroHtml()}
     ${tripExpenseSummaryHtml()}
     <div class="day-tabs" role="tablist" aria-label="旅行日期">
-      ${days.map(item => `
-        <button class="day-tab ${String(item.id) === String(state.currentDayId) ? 'active' : ''}" data-day-id="${attr(item.id)}" type="button" role="tab" aria-selected="${String(item.id) === String(state.currentDayId) ? 'true' : 'false'}">
-          <strong>D${dayNumber(item.day_date, trip.start_date)} · ${escapeHtml(formatDate(item.day_date))}</strong>
-          <span>${escapeHtml(item.title || weekday(item.day_date))}</span>
-        </button>
-      `).join('')}
+      ${days.map(item => {
+        const isToday = String(item.day_date || '').slice(0, 10) === localDateKey();
+        return `
+          <button class="day-tab ${String(item.id) === String(state.currentDayId) ? 'active' : ''} ${isToday ? 'today' : ''}" data-day-id="${attr(item.id)}" type="button" role="tab" aria-selected="${String(item.id) === String(state.currentDayId) ? 'true' : 'false'}">
+            <strong>D${dayNumber(item.day_date, trip.start_date)} · ${escapeHtml(formatDate(item.day_date))}</strong>
+            <span>${isToday ? '今天 · ' : ''}${escapeHtml(item.title || weekday(item.day_date))}</span>
+          </button>
+        `;
+      }).join('')}
     </div>
     ${day ? `
       <div class="section-head itinerary-section-head">

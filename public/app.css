@@ -1621,3 +1621,36 @@ textarea {
 .reorder-mode .leg-map-unavailable {
   opacity: .58;
 }
+
+
+/* 2026-09-28 UI polish: navigation icons and today cue */
+.ui-icon,
+.nav-icon svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon-button .ui-icon {
+  width: 24px;
+  height: 24px;
+}
+.nav-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 0;
+}
+.day-tab.today:not(.active) {
+  border-color: #b9d5cd;
+  background: #f5faf7;
+}
+.day-tab.today:not(.active) span {
+  color: var(--accent);
+  font-weight: 750;
+}
