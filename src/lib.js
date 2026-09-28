@@ -167,7 +167,7 @@ export function normalizeMoney(value, field = '金额') {
 export function normalizeItemDetails(value) {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   const kind = cleanText(source.kind, 12).toLowerCase();
-  if (kind && !new Set(['lodging', 'flight', 'train']).has(kind)) {
+  if (kind && !new Set(['lodging', 'flight', 'train', 'dining']).has(kind)) {
     throw httpError(400, '结构化行程类型无效');
   }
 
@@ -177,6 +177,38 @@ export function normalizeItemDetails(value) {
     train: ['trainNo', 'departureDate', 'departureTime', 'departureStation', 'arrivalDate', 'arrivalTime', 'arrivalStation', 'carriage', 'seat', 'confirmationNo']
   };
   if (!kind) return {};
+
+  if (kind === 'dining') {
+    const sourceCandidates = Array.isArray(source.candidates) ? source.candidates.slice(0, 8) : [];
+    const candidates = [];
+    for (let index = 0; index < sourceCandidates.length; index += 1) {
+      const candidate = sourceCandidates[index] && typeof sourceCandidates[index] === 'object' ? sourceCandidates[index] : {};
+      const id = cleanText(candidate.id, 80) || `candidate-${index + 1}`;
+      const latitude = normalizeCoordinate(candidate.latitude, '候选餐厅纬度', -90, 90);
+      const longitude = normalizeCoordinate(candidate.longitude, '候选餐厅经度', -180, 180);
+      if ((latitude === null) !== (longitude === null)) throw httpError(400, '候选餐厅纬度和经度需要同时填写');
+      const sourceUrl = cleanText(candidate.sourceUrl, 2000);
+      candidates.push({
+        id,
+        name: cleanText(candidate.name, 160),
+        address: cleanText(candidate.address, 240),
+        locationUid: cleanText(candidate.locationUid, 128),
+        latitude,
+        longitude,
+        coordType: normalizeCoordType(candidate.coordType),
+        sourceUrl: sourceUrl ? optionalUrl(sourceUrl, '候选餐厅链接') : '',
+        sourceTitle: cleanText(candidate.sourceTitle, 180),
+        sourcePlatform: cleanText(candidate.sourcePlatform, 32),
+        appUrl: cleanText(candidate.appUrl, 2000)
+      });
+    }
+    const selectedCandidateId = cleanText(source.selectedCandidateId, 80);
+    return {
+      kind,
+      selectedCandidateId: candidates.some(candidate => candidate.id === selectedCandidateId) ? selectedCandidateId : '',
+      candidates
+    };
+  }
 
   const result = { kind };
   for (const key of allowed[kind]) {
