@@ -243,6 +243,39 @@ function referencePlatformMeta(platform) {
   return REFERENCE_PLATFORM_META[platform] || REFERENCE_PLATFORM_META.web;
 }
 
+function referenceActionMeta(link) {
+  const href = link?.url || link?.value || '';
+  const platform = link?.platform || detectReferencePlatform(href);
+  const meta = referencePlatformMeta(platform);
+
+  if (link?.kind === 'copy') {
+    return { type: 'copy', platform, label: `${meta.icon} ${link.title || meta.label} · 复制口令`, value: link.value || '' };
+  }
+
+  if (platform === 'wechat' && link?.kind === 'uri') {
+    return { type: 'wechat-scheme', platform, label: `${meta.icon} ${link.title || meta.label} · 打开 App`, href };
+  }
+
+  if (platform === 'dianping') {
+    return {
+      type: 'app',
+      platform,
+      label: `${meta.icon} ${link.title || meta.label} · 打开 App`,
+      href: link.appUrl || dianpingClientAppUrl(href, link.title || meta.label)
+    };
+  }
+
+  if (link?.appUrl) {
+    return { type: 'app', platform, label: `${meta.icon} ${link.title || meta.label} · 打开 App`, href: link.appUrl };
+  }
+
+  if (platform === 'wechat') {
+    return { type: 'web', platform, label: `${meta.icon} ${link.title || meta.label} · 打开小程序`, href };
+  }
+
+  return { type: 'web', platform, label: `${meta.icon} ${link.title || meta.label} · 打开网页`, href };
+}
+
 function dianpingClientAppUrl(value, title = '') {
   try {
     const url = new URL(String(value || ''), window.location.origin);
