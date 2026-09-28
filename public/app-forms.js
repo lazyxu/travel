@@ -59,12 +59,17 @@ function openDayForm(day) {
     <div class="stack">
       <label class="field"><span>当天标题</span><input name="title" maxlength="120" value="${attr(day.title || '')}" placeholder="例如：岚山与嵯峨野" /></label>
       <label class="field"><span>当天备注</span><textarea name="notes" maxlength="3000" placeholder="路线提示、天气、集合点等">${escapeHtml(day.notes || '')}</textarea></label>
+      <label class="field"><span>百度地图路线模式</span>
+        <select name="routeMode">
+          ${Object.entries(ROUTE_MODE_META).map(([value, meta]) => `<option value="${value}" ${(day.route_mode || 'driving') === value ? 'selected' : ''}>${meta.icon} ${meta.label}</option>`).join('')}
+        </select>
+      </label>
       <button class="button primary full" type="submit">保存</button>
     </div>
   `, async form => {
     await api(`/api/days/${day.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title: form.get('title'), notes: form.get('notes') })
+      body: JSON.stringify({ title: form.get('title'), notes: form.get('notes'), routeMode: form.get('routeMode') })
     });
     closeSheet();
     await refreshCurrent();
@@ -89,20 +94,28 @@ function imagePreviewHtml(urls = []) {
   `;
 }
 
-function itemFormHtml(item = {}) {
+function itemFormHtml(item = {}, currentDayId = state.currentDayId) {
   const startTime = item.start_time || item.item_time || '';
   const links = itemReferenceValues(item);
+  const selectedDayId = String(item.day_id || currentDayId || '');
   return `
     <div class="stack">
       <div class="field-grid">
         <label class="field"><span>开始时间</span><input name="startTime" type="time" value="${attr(startTime)}" /></label>
         <label class="field"><span>结束时间</span><input name="endTime" type="time" value="${attr(item.end_time || '')}" /></label>
       </div>
-      <label class="field"><span>类型</span>
-        <select name="category">
-          ${['交通','景点','餐饮','住宿','购物','其他'].map(category => `<option value="${category}" ${item.category === category ? 'selected' : ''}>${categoryMeta(category).icon} ${category}</option>`).join('')}
-        </select>
-      </label>
+      <div class="field-grid">
+        <label class="field"><span>类型</span>
+          <select name="category">
+            ${['交通','景点','餐饮','住宿','购物','其他'].map(category => `<option value="${category}" ${item.category === category ? 'selected' : ''}>${categoryMeta(category).icon} ${category}</option>`).join('')}
+          </select>
+        </label>
+        <label class="field"><span>所在日期</span>
+          <select name="targetDayId">
+            ${state.current.days.map(target => `<option value="${target.id}" ${String(target.id) === selectedDayId ? 'selected' : ''}>D${dayNumber(target.day_date, state.current.trip.start_date)} · ${formatDate(target.day_date)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
       <label class="field"><span>行程标题 *</span><input name="title" required maxlength="160" value="${attr(item.title || '')}" placeholder="例如：清水寺" /></label>
       <div class="poi-search-box">
         <div class="poi-search-head"><strong>搜索百度地点</strong><span>选择后自动填写地址和 BD-09 坐标</span></div>
@@ -114,28 +127,41 @@ function itemFormHtml(item = {}) {
         <div class="poi-results hidden" data-poi-results></div>
       </div>
       <label class="field"><span>地点 / 地址</span><input name="location" maxlength="240" value="${attr(item.location || '')}" placeholder="例如：京都市东山区清水1丁目294" /></label>
-      <div class="geo-box">
-        <div class="geo-head"><strong>百度地图坐标</strong><span>可选；当天多点路线需要坐标</span></div>
-        <div class="field-grid">
-          <label class="field"><span>纬度 Latitude</span><input name="latitude" type="number" step="any" min="-90" max="90" value="${attr(item.latitude ?? '')}" placeholder="30.274084" /></label>
-          <label class="field"><span>经度 Longitude</span><input name="longitude" type="number" step="any" min="-180" max="180" value="${attr(item.longitude ?? '')}" placeholder="120.15507" /></label>
+      <details class="advanced-details">
+        <summary>高级位置设置</summary>
+        <div class="geo-box">
+          <div class="geo-head"><strong>坐标</strong><span>POI 选择后自动填写，一般无需修改</span></div>
+          <div class="field-grid">
+            <label class="field"><span>纬度 Latitude</span><input name="latitude" type="number" step="any" min="-90" max="90" value="${attr(item.latitude ?? '')}" placeholder="30.274084" /></label>
+            <label class="field"><span>经度 Longitude</span><input name="longitude" type="number" step="any" min="-180" max="180" value="${attr(item.longitude ?? '')}" placeholder="120.15507" /></label>
+          </div>
+          <label class="field"><span>坐标类型</span>
+            <select name="coordType">
+              ${[
+                ['bd09ll', 'BD-09 百度坐标'],
+                ['gcj02', 'GCJ-02 高德/腾讯坐标'],
+                ['wgs84', 'WGS84 GPS 坐标']
+              ].map(([value, label]) => `<option value="${value}" ${(item.coord_type || 'bd09ll') === value ? 'selected' : ''}>${label}</option>`).join('')}
+            </select>
+          </label>
         </div>
-        <label class="field"><span>坐标类型</span>
-          <select name="coordType">
-            ${[
-              ['bd09ll', 'BD-09 百度坐标'],
-              ['gcj02', 'GCJ-02 高德/腾讯坐标'],
-              ['wgs84', 'WGS84 GPS 坐标']
-            ].map(([value, label]) => `<option value="${value}" ${(item.coord_type || 'bd09ll') === value ? 'selected' : ''}>${label}</option>`).join('')}
-          </select>
-        </label>
-      </div>
+      </details>
       <label class="field"><span>备注</span><textarea name="notes" maxlength="5000" placeholder="预约信息、交通方式、必点菜等">${escapeHtml(item.notes || '')}</textarea></label>
       <label class="field"><span>参考入口</span><textarea name="references" class="link-url-input" maxlength="30000" placeholder="支持微信小程序、抖音、美团、大众点评、小红书、闲鱼和普通网页；每行一个">${escapeHtml(links.join('\n'))}</textarea></label>
       <p class="form-help">最多 12 个。网页会自动识别平台并尝试提取标题；微信小程序可粘贴 #小程序://... 口令，保存后可一键复制。</p>
-      <label class="field"><span>行程图片</span><textarea name="imageUrls" class="image-url-input" maxlength="24000" placeholder="粘贴图片 URL，每行一张；最多 12 张">${escapeHtml((item.image_urls || []).join('\n'))}</textarea></label>
+      <div class="field">
+        <span>行程图片</span>
+        <div class="image-upload-row">
+          <label class="button ghost small image-upload-button">
+            📷 从相册添加
+            <input name="imageFiles" type="file" accept="image/*" multiple hidden />
+          </label>
+          <span class="image-upload-status" data-image-upload-status>浏览器会先压缩再上传</span>
+        </div>
+        <textarea name="imageUrls" class="image-url-input" maxlength="24000" placeholder="也可粘贴外部图片 URL，每行一张；最多 12 张">${escapeHtml((item.image_urls || []).join('\n'))}</textarea>
+      </div>
       <div class="image-preview" data-image-preview>${imagePreviewHtml(item.image_urls || [])}</div>
-      <p class="form-help">图片支持 http/https URL，可一次粘贴多行，最多 12 张。</p>
+      <p class="form-help">手机相册图片会压缩到最长边约 1600px 后上传到你自己的服务器；也支持外部 http/https 图片 URL。</p>
       <div class="form-actions">
         ${item.id ? '<button id="delete-item" class="button danger" type="button">删除</button>' : ''}
         <button class="button primary" type="submit">保存</button>
@@ -145,7 +171,7 @@ function itemFormHtml(item = {}) {
 }
 
 function openItemForm(day, item = null) {
-  openSheet(item ? '编辑行程' : '添加行程', itemFormHtml(item || {}), async form => {
+  openSheet(item ? '编辑行程' : '添加行程', itemFormHtml(item || {}, day.id), async form => {
     const payload = {
       startTime: form.get('startTime'),
       endTime: form.get('endTime'),
@@ -157,12 +183,26 @@ function openItemForm(day, item = null) {
       coordType: form.get('coordType'),
       notes: form.get('notes'),
       references: extractReferenceInputs(form.get('references'), 12),
-      imageUrls: extractUrls(form.get('imageUrls'), 12)
+      imageUrls: extractImageRefs(form.get('imageUrls'), 12)
     };
-    if (item) await api(`/api/items/${item.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-    else await api(`/api/days/${day.id}/items`, { method: 'POST', body: JSON.stringify(payload) });
+    const targetDayId = String(form.get('targetDayId') || day.id);
+    if (item) {
+      await api(`/api/items/${item.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      if (targetDayId !== String(item.day_id)) {
+        await api(`/api/items/${item.id}/move`, {
+          method: 'PUT',
+          body: JSON.stringify({ targetDayId, position: 999999 })
+        });
+      }
+    } else {
+      await api(`/api/days/${targetDayId}/items`, { method: 'POST', body: JSON.stringify(payload) });
+    }
     closeSheet();
-    await refreshCurrent();
+    if (targetDayId !== String(state.currentDayId)) {
+      await navigate(`/trips/${state.current.trip.id}/day/${targetDayId}`);
+    } else {
+      await refreshCurrent();
+    }
     showToast(item ? '行程已更新' : '行程已添加');
   });
 
@@ -217,11 +257,45 @@ function openItemForm(day, item = null) {
   }
 
   const imageInput = el.sheetForm.querySelector('[name="imageUrls"]');
+  const imageFiles = el.sheetForm.querySelector('[name="imageFiles"]');
   const imagePreview = el.sheetForm.querySelector('[data-image-preview]');
+  const imageUploadStatus = el.sheetForm.querySelector('[data-image-upload-status]');
   if (imageInput && imagePreview) {
-    const renderImagePreview = () => { imagePreview.innerHTML = imagePreviewHtml(extractUrls(imageInput.value, 12)); };
+    const renderImagePreview = () => { imagePreview.innerHTML = imagePreviewHtml(extractImageRefs(imageInput.value, 12)); };
     imageInput.addEventListener('input', renderImagePreview);
     imageInput.addEventListener('paste', () => setTimeout(renderImagePreview, 0));
+
+    imageFiles?.addEventListener('change', async () => {
+      const files = [...(imageFiles.files || [])];
+      if (!files.length) return;
+      let refs = extractImageRefs(imageInput.value, 12);
+      if (refs.length + files.length > 12) {
+        showToast('每条行程最多 12 张图片', 'error');
+        imageFiles.value = '';
+        return;
+      }
+
+      imageFiles.disabled = true;
+      try {
+        for (let index = 0; index < files.length; index += 1) {
+          if (imageUploadStatus) imageUploadStatus.textContent = `正在处理 ${index + 1}/${files.length}…`;
+          const blob = await compressImageFile(files[index]);
+          const url = await uploadImageBlob(blob);
+          refs.push(url);
+          refs = [...new Set(refs)].slice(0, 12);
+          imageInput.value = refs.join('\n');
+          renderImagePreview();
+        }
+        if (imageUploadStatus) imageUploadStatus.textContent = `已添加 ${files.length} 张图片`;
+        showToast('图片已上传');
+      } catch (error) {
+        if (imageUploadStatus) imageUploadStatus.textContent = '上传失败';
+        showToast(error.message, 'error');
+      } finally {
+        imageFiles.disabled = false;
+        imageFiles.value = '';
+      }
+    });
   }
 
   if (item) {

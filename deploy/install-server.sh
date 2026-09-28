@@ -131,8 +131,8 @@ check_host() {
 }
 
 prepare_layout() {
-  mkdir -p "$CONFIG_DIR" "$BIN_DIR" "$DATA_DIR/postgres" "$BACKUP_DIR" "$STATE_DIR" "$LOG_DIR"
-  chmod 700 "$TRAVEL_HOME" "$CONFIG_DIR" "$BIN_DIR" "$DATA_DIR" "$BACKUP_DIR" "$STATE_DIR" "$LOG_DIR" || true
+  mkdir -p "$CONFIG_DIR" "$BIN_DIR" "$DATA_DIR/postgres" "$DATA_DIR/uploads" "$BACKUP_DIR" "$STATE_DIR" "$LOG_DIR"
+  chmod 700 "$TRAVEL_HOME" "$CONFIG_DIR" "$BIN_DIR" "$DATA_DIR" "$DATA_DIR/uploads" "$BACKUP_DIR" "$STATE_DIR" "$LOG_DIR" || true
 }
 
 write_env_if_missing() {
@@ -155,7 +155,10 @@ TRAVEL_IMAGE=${TRAVEL_IMAGE:-ghcr.io/lazyxu/travel:master}
 TRAVEL_POSTGRES_IMAGE=${TRAVEL_POSTGRES_IMAGE:-postgres:17-alpine}
 TRAVEL_VERSION=$SOURCE_REF
 TRAVEL_POSTGRES_DATA_DIR=$DATA_DIR/postgres
+TRAVEL_UPLOAD_DATA_DIR=$DATA_DIR/uploads
 TRAVEL_DB_POOL_MAX=10
+TRAVEL_APP_UID=$(id -u)
+TRAVEL_APP_GID=$(id -g)
 TRAVEL_APP_MEMORY_LIMIT=512m
 TRAVEL_APP_CPU_LIMIT=1.0
 TRAVEL_APP_PIDS_LIMIT=256
@@ -172,6 +175,9 @@ ENV
 ensure_optional_env_defaults() {
   [[ -f "$ENV_PATH" ]] || return 0
   grep -q '^TRAVEL_BAIDU_MAP_AK=' "$ENV_PATH" || printf '\nTRAVEL_BAIDU_MAP_AK=\n' >> "$ENV_PATH"
+  grep -q '^TRAVEL_UPLOAD_DATA_DIR=' "$ENV_PATH" || printf 'TRAVEL_UPLOAD_DATA_DIR=%s\n' "$DATA_DIR/uploads" >> "$ENV_PATH"
+  grep -q '^TRAVEL_APP_UID=' "$ENV_PATH" || printf 'TRAVEL_APP_UID=%s\n' "$(id -u)" >> "$ENV_PATH"
+  grep -q '^TRAVEL_APP_GID=' "$ENV_PATH" || printf 'TRAVEL_APP_GID=%s\n' "$(id -g)" >> "$ENV_PATH"
 }
 
 set_env_value() {
@@ -304,15 +310,24 @@ show_access() {
 backup() {
   [[ -f "$ENV_PATH" && -f "$COMPOSE_PATH" ]] || die 'travel 尚未安装'
   mkdir -p "$BACKUP_DIR"
-  local stamp target retention
+  local stamp target retention upload_dir uploads_archive
   stamp="$(date '+%Y%m%d-%H%M%S')"
   target="$BACKUP_DIR/travel-$stamp.sql.gz"
+  uploads_archive="$BACKUP_DIR/travel-$stamp.uploads.tar.gz"
   say "备份数据库 -> $target"
   compose exec -T postgres pg_dump -U travel -d travel | gzip -c > "$target"
   chmod 600 "$target"
+  upload_dir="$(grep -E '^TRAVEL_UPLOAD_DATA_DIR=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
+  upload_dir="${upload_dir:-$DATA_DIR/uploads}"
+  if [[ -d "$upload_dir" ]]; then
+    say "备份上传图片 -> $uploads_archive"
+    tar -czf "$uploads_archive" -C "$upload_dir" .
+    chmod 600 "$uploads_archive"
+  fi
   retention="$(grep -E '^TRAVEL_BACKUP_RETENTION_DAYS=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
   retention="${retention:-7}"
   find "$BACKUP_DIR" -type f -name 'travel-*.sql.gz' -mtime "+$retention" -delete 2>/dev/null || true
+  find "$BACKUP_DIR" -type f -name 'travel-*.uploads.tar.gz' -mtime "+$retention" -delete 2>/dev/null || true
   say '备份完成'
 }
 
@@ -357,6 +372,7 @@ status() {
   say "home: $TRAVEL_HOME"
   say "config: $CONFIG_DIR"
   say "postgres data: $DATA_DIR/postgres"
+  say "uploads: $(grep -E '^TRAVEL_UPLOAD_DATA_DIR=' "$ENV_PATH" | tail -1 | cut -d= -f2- || true)"
   say "backups: $BACKUP_DIR"
   compose ps
 }

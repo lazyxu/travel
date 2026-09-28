@@ -31,6 +31,7 @@ services:
   app:
     image: ${TRAVEL_IMAGE:-ghcr.io/lazyxu/travel:master}
     container_name: travel-app
+    user: "${TRAVEL_APP_UID:-1000}:${TRAVEL_APP_GID:-1000}"
     environment:
       PORT: 8080
       DATABASE_URL: postgres://travel:${POSTGRES_PASSWORD}@postgres:5432/travel
@@ -39,8 +40,11 @@ services:
       TRAVEL_COOKIE_SECURE: ${TRAVEL_COOKIE_SECURE:-0}
       TRAVEL_AUTH_DISABLED: ${TRAVEL_AUTH_DISABLED:-1}
       TRAVEL_BAIDU_MAP_AK: ${TRAVEL_BAIDU_MAP_AK:-}
+      TRAVEL_UPLOAD_DIR: /data/uploads
       TRAVEL_VERSION: ${TRAVEL_VERSION:-master}
       DB_POOL_MAX: ${TRAVEL_DB_POOL_MAX:-10}
+    volumes:
+      - "${TRAVEL_UPLOAD_DATA_DIR:-../data/uploads}:/data/uploads"
     ports:
       - "${TRAVEL_BIND:-0.0.0.0}:${TRAVEL_PORT:-3080}:8080"
     depends_on:

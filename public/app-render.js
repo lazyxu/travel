@@ -101,7 +101,12 @@ function renderItinerary() {
           ${day.notes ? `<div class="section-subtitle">${escapeHtml(day.notes)}</div>` : ''}
         </div>
         <div class="section-actions">
-          ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}" target="_blank" rel="noopener noreferrer">🗺 百度地图路线</a>` : ''}
+          <label class="route-mode-control" title="百度地图路线模式">
+            <select id="route-mode-select" aria-label="路线模式">
+              ${Object.entries(ROUTE_MODE_META).map(([value, meta]) => `<option value="${value}" ${(day.route_mode || 'driving') === value ? 'selected' : ''}>${meta.icon} ${meta.label}</option>`).join('')}
+            </select>
+          </label>
+          ${baiduDayRouteUrl(day) ? `<a class="button ghost small map-button" href="${attr(baiduDayRouteUrl(day))}" target="_blank" rel="noopener noreferrer">🗺 地图路线</a>` : ''}
           <button id="edit-day" class="button ghost small" type="button">编辑当天</button>
         </div>
       </div>
@@ -128,6 +133,26 @@ function renderItinerary() {
   if (day) {
     el.main.querySelector('#edit-day').addEventListener('click', () => openDayForm(day));
     el.main.querySelector('#add-item').addEventListener('click', () => openItemForm(day));
+    const routeModeSelect = el.main.querySelector('#route-mode-select');
+    routeModeSelect?.addEventListener('change', async () => {
+      routeModeSelect.disabled = true;
+      try {
+        await api(`/api/days/${day.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            title: day.title || '',
+            notes: day.notes || '',
+            routeMode: routeModeSelect.value
+          })
+        });
+        day.route_mode = routeModeSelect.value;
+        renderItinerary();
+      } catch (error) {
+        showToast(error.message, 'error');
+        routeModeSelect.disabled = false;
+      }
+    });
+    bindItinerarySorting(day);
     el.main.querySelectorAll('[data-edit-item]').forEach(button => {
       button.addEventListener('click', () => {
         const item = day.items.find(x => String(x.id) === button.dataset.editItem);
@@ -143,12 +168,13 @@ function itemCardHtml(item) {
   const links = Array.isArray(item.links) ? item.links : [];
   const mapUrl = baiduPointUrl(item);
   return `
-    <article class="timeline-card">
+    <article class="timeline-card" data-item-id="${attr(item.id)}">
       <div class="timeline-time ${(item.start_time || item.item_time) ? '' : 'muted'}">${escapeHtml(formatItemTime(item))}</div>
       <div class="timeline-content">
         <div class="timeline-top">
           <span class="category"><span class="category-icon" aria-hidden="true">${category.icon}</span>${escapeHtml(category.label)}</span>
           <div class="card-actions">
+            <button class="drag-handle" type="button" data-drag-handle aria-label="拖动排序">⋮⋮</button>
             <button class="card-action" type="button" data-edit-item="${attr(item.id)}" aria-label="编辑">编辑</button>
           </div>
         </div>
@@ -267,6 +293,107 @@ function bindReferenceActions() {
       } catch {
         showToast('复制失败，请手动复制', 'error');
       }
+    });
+  });
+}
+
+function bindItinerarySorting(day) {
+  const timeline = el.main.querySelector('.timeline');
+  if (!timeline || !day.items?.length) return;
+
+  const makeDayTargets = () => {
+    const bar = document.createElement('div');
+    bar.className = 'drag-day-targets';
+    bar.innerHTML = `
+      <span class="drag-day-label">移动到</span>
+      <div class="drag-day-list">
+        ${state.current.days.map(target => `
+          <button class="drag-day-target ${String(target.id) === String(day.id) ? 'current' : ''}"
+                  type="button"
+                  data-sort-day="${attr(target.id)}">
+            D${dayNumber(target.day_date, state.current.trip.start_date)}
+          </button>
+        `).join('')}
+      </div>
+    `;
+    document.body.appendChild(bar);
+    return bar;
+  };
+
+  el.main.querySelectorAll('[data-drag-handle]').forEach(handle => {
+    handle.addEventListener('pointerdown', event => {
+      if (event.button !== undefined && event.button !== 0) return;
+      event.preventDefault();
+
+      const card = handle.closest('[data-item-id]');
+      if (!card) return;
+      const itemId = card.dataset.itemId;
+      let targetDayId = String(day.id);
+      const targets = makeDayTargets();
+      card.classList.add('sorting-card');
+      document.body.classList.add('sorting-itinerary');
+
+      const updateDayTarget = element => {
+        const target = element?.closest?.('[data-sort-day]');
+        if (!target) return false;
+        targetDayId = target.dataset.sortDay;
+        targets.querySelectorAll('[data-sort-day]').forEach(button => {
+          button.classList.toggle('drop-active', button.dataset.sortDay === targetDayId);
+        });
+        return true;
+      };
+
+      const onMove = moveEvent => {
+        if (moveEvent.pointerId !== event.pointerId) return;
+        moveEvent.preventDefault();
+        const stack = document.elementsFromPoint(moveEvent.clientX, moveEvent.clientY);
+        if (stack.some(updateDayTarget)) return;
+
+        targetDayId = String(day.id);
+        targets.querySelectorAll('[data-sort-day]').forEach(button => button.classList.remove('drop-active'));
+        const targetCard = stack.find(node => node?.matches?.('.timeline-card[data-item-id]'));
+        if (!targetCard || targetCard === card || targetCard.parentElement !== timeline) return;
+        const rect = targetCard.getBoundingClientRect();
+        const after = moveEvent.clientY > rect.top + rect.height / 2;
+        timeline.insertBefore(card, after ? targetCard.nextSibling : targetCard);
+      };
+
+      const finish = async upEvent => {
+        if (upEvent.pointerId !== event.pointerId) return;
+        window.removeEventListener('pointermove', onMove, { capture: true });
+        window.removeEventListener('pointerup', finish, { capture: true });
+        window.removeEventListener('pointercancel', finish, { capture: true });
+        card.classList.remove('sorting-card');
+        document.body.classList.remove('sorting-itinerary');
+        targets.remove();
+
+        try {
+          if (targetDayId !== String(day.id)) {
+            await api(`/api/items/${itemId}/move`, {
+              method: 'PUT',
+              body: JSON.stringify({ targetDayId, position: 999999 })
+            });
+            await navigate(`/trips/${state.current.trip.id}/day/${targetDayId}`);
+            showToast('行程已移动');
+            return;
+          }
+
+          const itemIds = [...timeline.querySelectorAll('.timeline-card[data-item-id]')].map(node => node.dataset.itemId);
+          await api(`/api/days/${day.id}/items/order`, {
+            method: 'PUT',
+            body: JSON.stringify({ itemIds })
+          });
+          await refreshCurrent();
+          showToast('行程顺序已保存');
+        } catch (error) {
+          showToast(error.message, 'error');
+          await refreshCurrent();
+        }
+      };
+
+      window.addEventListener('pointermove', onMove, { capture: true, passive: false });
+      window.addEventListener('pointerup', finish, { capture: true });
+      window.addEventListener('pointercancel', finish, { capture: true });
     });
   });
 }

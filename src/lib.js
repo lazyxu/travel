@@ -30,7 +30,9 @@ export function normalizeUrlList(value, field = '图片链接', maxItems = 12) {
   for (const item of source.flatMap(entry => String(entry ?? '').split(/\r?\n/))) {
     const raw = cleanText(item, 2000);
     if (!raw) continue;
-    const normalized = optionalUrl(raw, field);
+    let normalized;
+    if (/^\/uploads\/[a-zA-Z0-9._-]+$/.test(raw)) normalized = raw;
+    else normalized = optionalUrl(raw, field);
     if (!urls.includes(normalized)) urls.push(normalized);
     if (urls.length > maxItems) throw httpError(400, `${field}最多支持 ${maxItems} 个`);
   }
@@ -119,6 +121,14 @@ export function normalizeCoordType(value) {
     throw httpError(400, '坐标类型仅支持 BD-09、GCJ-02 或 WGS84');
   }
   return type;
+}
+
+export function normalizeRouteMode(value) {
+  const mode = cleanText(value, 12).toLowerCase() || 'driving';
+  if (!new Set(['driving', 'walking', 'transit', 'riding']).has(mode)) {
+    throw httpError(400, '路线模式仅支持驾车、步行、公交或骑行');
+  }
+  return mode;
 }
 
 export function toBoolean(value) {

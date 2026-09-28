@@ -280,3 +280,90 @@ button { color: inherit; }
   .poi-search-row { grid-template-columns: 1fr auto; }
   .poi-search-row input[name="poiQuery"] { grid-column: 1 / -1; }
 }
+
+.route-mode-control select {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.drag-handle {
+  border: 0;
+  background: transparent;
+  padding: 2px 6px;
+  color: #8b8f88;
+  font-size: 18px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.drag-handle:active { cursor: grabbing; }
+.sorting-card {
+  opacity: .72;
+  transform: scale(.99);
+  box-shadow: 0 10px 26px rgba(20,25,22,.16);
+}
+.sorting-itinerary { user-select: none; }
+.drag-day-targets {
+  position: fixed;
+  z-index: 90;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(calc(100% - 24px), 720px);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255,255,255,.97);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+.drag-day-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.drag-day-list { display: flex; gap: 7px; overflow-x: auto; scrollbar-width: none; }
+.drag-day-list::-webkit-scrollbar { display: none; }
+.drag-day-target {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 750;
+}
+.drag-day-target.current { background: var(--surface-2); }
+.drag-day-target.drop-active { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+.advanced-details {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fafbf8;
+}
+.advanced-details > summary {
+  cursor: pointer;
+  padding: 11px 13px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  list-style: none;
+}
+.advanced-details > summary::-webkit-details-marker { display: none; }
+.advanced-details > summary::after { content: '⌄'; float: right; }
+.advanced-details[open] > summary::after { content: '⌃'; }
+.advanced-details .geo-box { border: 0; border-top: 1px solid var(--line); border-radius: 0 0 14px 14px; }
+
+.image-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.image-upload-button { flex: 0 0 auto; }
+.image-upload-status {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}

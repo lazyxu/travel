@@ -4,6 +4,7 @@ import {
   enumerateDates,
   normalizeCoordinate,
   normalizeReferences,
+  normalizeRouteMode,
   normalizeTime,
   normalizeTimeRange,
   normalizeUrlList,
@@ -66,4 +67,19 @@ test('Baidu POI payload normalization keeps location data', () => {
   assert.deepEqual(normalizeBaiduPoiPayload({
     result: [{ uid: '1', name: '西湖', city: '杭州市', district: '西湖区', location: { lat: 30.25, lng: 120.15 } }]
   })[0].location, { lat: 30.25, lng: 120.15 });
+});
+
+
+test('image URL list accepts local uploaded image references', () => {
+  assert.deepEqual(
+    normalizeUrlList(['/uploads/123-file.jpg', 'https://example.com/a.jpg']),
+    ['/uploads/123-file.jpg', 'https://example.com/a.jpg']
+  );
+  assert.throws(() => normalizeUrlList(['/etc/passwd']));
+});
+
+test('route mode validates supported Baidu modes', () => {
+  assert.equal(normalizeRouteMode('walking'), 'walking');
+  assert.equal(normalizeRouteMode(''), 'driving');
+  assert.throws(() => normalizeRouteMode('flight'));
 });

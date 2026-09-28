@@ -21,6 +21,8 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run check
+      - name: Validate PWA manifest
+        run: node -e "JSON.parse(require('fs').readFileSync('public/manifest.webmanifest','utf8'))"
       - run: npm test
       - name: Validate installer syntax
         run: bash -n deploy/install-server.sh

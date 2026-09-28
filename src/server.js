@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -10,6 +11,7 @@ import {
   normalizeCoordType,
   normalizeCoordinate,
   normalizeReferences,
+  normalizeRouteMode,
   normalizeTimeRange,
   normalizeUrlList,
   optionalUrl,
@@ -27,6 +29,7 @@ const adminPassword = process.env.TRAVEL_ADMIN_PASSWORD || '';
 const sessionSecret = process.env.TRAVEL_SESSION_SECRET || '';
 const cookieSecure = process.env.TRAVEL_COOKIE_SECURE === '1';
 const baiduMapAk = process.env.TRAVEL_BAIDU_MAP_AK || '';
+const uploadDir = process.env.TRAVEL_UPLOAD_DIR || '/data/uploads';
 const categories = new Set(['交通', '景点', '餐饮', '住宿', '购物', '其他']);
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -96,7 +99,7 @@ async function getTripAggregate(id) {
 
   const [daysResult, itemsResult, todosResult] = await Promise.all([
     pool.query(
-      `SELECT id, trip_id, day_date, title, notes, position
+      `SELECT id, trip_id, day_date, title, notes, route_mode, position
          FROM trip_days WHERE trip_id = $1 ORDER BY day_date, position, id`,
       [id]
     ),
@@ -108,7 +111,7 @@ async function getTripAggregate(id) {
          FROM itinerary_items i
          JOIN trip_days d ON d.id = i.day_id
         WHERE d.trip_id = $1
-        ORDER BY d.day_date, NULLIF(COALESCE(NULLIF(i.start_time, ''), i.item_time), '') NULLS LAST, i.position, i.id`,
+        ORDER BY d.day_date, i.position, i.id`,
       [id]
     ),
     pool.query(
@@ -281,9 +284,10 @@ app.put('/api/days/:id', async (req, res) => {
   const id = idParam(req.params.id, '日期 ID');
   const title = cleanText(req.body?.title, 120);
   const notes = cleanText(req.body?.notes, 3000);
+  const routeMode = normalizeRouteMode(req.body?.routeMode);
   const result = await pool.query(
-    `UPDATE trip_days SET title = $2, notes = $3 WHERE id = $1 RETURNING *`,
-    [id, title, notes]
+    `UPDATE trip_days SET title = $2, notes = $3, route_mode = $4 WHERE id = $1 RETURNING *`,
+    [id, title, notes, routeMode]
   );
   if (!result.rowCount) throw httpError(404, '日期不存在');
   res.json(result.rows[0]);
@@ -346,6 +350,87 @@ app.put('/api/items/:id', async (req, res) => {
   res.json(result.rows[0]);
 });
 
+app.put('/api/days/:dayId/items/order', async (req, res) => {
+  const dayId = idParam(req.params.dayId, '日期 ID');
+  const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds.map(value => idParam(value, '行程项 ID')) : [];
+  if (new Set(itemIds).size !== itemIds.length) throw httpError(400, '行程排序中存在重复项目');
+
+  await withTx(async client => {
+    const current = await client.query(
+      'SELECT id FROM itinerary_items WHERE day_id = $1 ORDER BY position, id FOR UPDATE',
+      [dayId]
+    );
+    const currentIds = current.rows.map(row => String(row.id));
+    if (currentIds.length !== itemIds.length || currentIds.some(id => !itemIds.includes(id))) {
+      throw httpError(409, '行程列表已经变化，请刷新后重试');
+    }
+    for (let index = 0; index < itemIds.length; index += 1) {
+      await client.query('UPDATE itinerary_items SET position = $2, updated_at = now() WHERE id = $1', [itemIds[index], index]);
+    }
+  });
+  res.json({ ok: true });
+});
+
+app.put('/api/items/:id/move', async (req, res) => {
+  const id = idParam(req.params.id, '行程项 ID');
+  const targetDayId = idParam(req.body?.targetDayId, '目标日期 ID');
+  const requestedPosition = Number.isFinite(Number(req.body?.position)) ? Math.max(0, Math.floor(Number(req.body.position))) : Number.MAX_SAFE_INTEGER;
+
+  await withTx(async client => {
+    const itemResult = await client.query(
+      `SELECT i.id, i.day_id, d.trip_id
+         FROM itinerary_items i JOIN trip_days d ON d.id = i.day_id
+        WHERE i.id = $1 FOR UPDATE`,
+      [id]
+    );
+    if (!itemResult.rowCount) throw httpError(404, '行程项不存在');
+    const item = itemResult.rows[0];
+
+    const targetDay = await client.query('SELECT id, trip_id FROM trip_days WHERE id = $1 FOR UPDATE', [targetDayId]);
+    if (!targetDay.rowCount) throw httpError(404, '目标日期不存在');
+    if (String(targetDay.rows[0].trip_id) !== String(item.trip_id)) throw httpError(400, '只能在同一次旅行内移动行程');
+
+    const targetItems = await client.query(
+      'SELECT id FROM itinerary_items WHERE day_id = $1 AND id <> $2 ORDER BY position, id FOR UPDATE',
+      [targetDayId, id]
+    );
+    const ids = targetItems.rows.map(row => String(row.id));
+    const position = Math.min(requestedPosition, ids.length);
+    ids.splice(position, 0, String(id));
+
+    await client.query('UPDATE itinerary_items SET day_id = $2, updated_at = now() WHERE id = $1', [id, targetDayId]);
+    for (let index = 0; index < ids.length; index += 1) {
+      await client.query('UPDATE itinerary_items SET position = $2 WHERE id = $1', [ids[index], index]);
+    }
+
+    if (String(item.day_id) !== String(targetDayId)) {
+      const sourceItems = await client.query(
+        'SELECT id FROM itinerary_items WHERE day_id = $1 ORDER BY position, id FOR UPDATE',
+        [item.day_id]
+      );
+      for (let index = 0; index < sourceItems.rows.length; index += 1) {
+        await client.query('UPDATE itinerary_items SET position = $2 WHERE id = $1', [sourceItems.rows[index].id, index]);
+      }
+    }
+  });
+  res.json({ ok: true });
+});
+
+app.post('/api/uploads/images', express.raw({
+  type: ['image/jpeg', 'image/png', 'image/webp'],
+  limit: '6mb'
+}), async (req, res) => {
+  if (!Buffer.isBuffer(req.body) || !req.body.length) throw httpError(400, '图片内容为空');
+  const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+  const ext = extensions[contentType];
+  if (!ext) throw httpError(415, '仅支持 JPEG、PNG、WebP 图片');
+  const name = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  await fs.mkdir(uploadDir, { recursive: true });
+  await fs.writeFile(path.join(uploadDir, name), req.body, { mode: 0o600, flag: 'wx' });
+  res.status(201).json({ url: `/uploads/${name}` });
+});
+
 app.delete('/api/items/:id', async (req, res) => {
   const result = await pool.query('DELETE FROM itinerary_items WHERE id = $1', [idParam(req.params.id, '行程项 ID')]);
   if (!result.rowCount) throw httpError(404, '行程项不存在');
@@ -391,6 +476,15 @@ app.delete('/api/todos/:id', async (req, res) => {
   res.status(204).end();
 });
 
+app.use('/uploads', (req, _res, next) => {
+  if (!isAuthenticated(req)) return next(httpError(401, '请先登录'));
+  next();
+}, express.static(uploadDir, {
+  maxAge: '7d',
+  immutable: true,
+  fallthrough: false
+}));
+
 app.use(express.static(publicDir, { maxAge: '1h', index: 'index.html' }));
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api/')) {
@@ -408,6 +502,7 @@ app.use((error, req, res, _next) => {
   });
 });
 
+await fs.mkdir(uploadDir, { recursive: true });
 await migrate();
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`travel listening on :${port}`);

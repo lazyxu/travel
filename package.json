@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/link-preview.js && node --check src/baidu.js && node --check public/app-core.js && node --check public/app-render.js && node --check public/app-forms.js"
+    "check": "node --check src/server.js && node --check src/link-preview.js && node --check src/baidu.js && node --check public/app-core.js && node --check public/app-render.js && node --check public/app-forms.js && node --check public/sw.js"
   },
   "engines": {
     "node": ">=22"

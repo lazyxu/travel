@@ -137,6 +137,18 @@ function extractUrls(value, maxItems = 12) {
   return urls;
 }
 
+function extractImageRefs(value, maxItems = 12) {
+  const refs = [];
+  for (const line of String(value || '').split(/\r?\n/)) {
+    const raw = line.trim().replace(/[),，。；;]+$/g, '');
+    if (!raw) continue;
+    if (!/^https?:\/\//i.test(raw) && !/^\/uploads\/[a-zA-Z0-9._-]+$/.test(raw)) continue;
+    if (!refs.includes(raw)) refs.push(raw);
+    if (refs.length >= maxItems) break;
+  }
+  return refs;
+}
+
 function formatItemTime(item) {
   const start = item?.start_time || item?.item_time || '';
   const end = item?.end_time || '';
@@ -202,6 +214,17 @@ async function copyText(value) {
   input.remove();
 }
 
+const ROUTE_MODE_META = {
+  driving: { icon: '🚗', label: '驾车' },
+  walking: { icon: '🚶', label: '步行' },
+  transit: { icon: '🚇', label: '公交' },
+  riding: { icon: '🚲', label: '骑行' }
+};
+
+function routeModeMeta(mode) {
+  return ROUTE_MODE_META[mode] || ROUTE_MODE_META.driving;
+}
+
 function baiduPointUrl(item) {
   const src = 'webapp.lazyxu.travel';
   if (Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude))) {
@@ -233,7 +256,7 @@ function baiduDayRouteUrl(day) {
   const params = new URLSearchParams({
     origin: pointValue(points[0]),
     destination: pointValue(points[points.length - 1]),
-    mode: 'driving',
+    mode: day?.route_mode || 'driving',
     coord_type: coordType,
     output: 'html',
     src: 'webapp.lazyxu.travel'
@@ -246,6 +269,68 @@ function baiduDayRouteUrl(day) {
   if (via.length) params.set('viaPoints', JSON.stringify({ viaPoints: via }));
   return `https://api.map.baidu.com/direction?${params.toString()}`;
 }
+
+async function compressImageFile(file, maxDimension = 1600, quality = 0.82) {
+  if (!file?.type?.startsWith('image/')) throw new Error('请选择图片文件');
+
+  let bitmap;
+  if ('createImageBitmap' in window) {
+    bitmap = await createImageBitmap(file);
+  } else {
+    bitmap = await new Promise((resolve, reject) => {
+      const image = new Image();
+      const url = URL.createObjectURL(file);
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(image);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('浏览器无法读取这张图片'));
+      };
+      image.src = url;
+    });
+  }
+
+  const width = bitmap.width || bitmap.naturalWidth;
+  const height = bitmap.height || bitmap.naturalHeight;
+  const scale = Math.min(1, maxDimension / Math.max(width, height));
+  const targetWidth = Math.max(1, Math.round(width * scale));
+  const targetHeight = Math.max(1, Math.round(height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+  bitmap.close?.();
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('图片压缩失败')), 'image/jpeg', quality);
+  });
+}
+
+async function uploadImageBlob(blob) {
+  const response = await fetch('/api/uploads/images', {
+    method: 'POST',
+    headers: { 'Content-Type': blob.type || 'image/jpeg' },
+    body: blob
+  });
+  let payload = null;
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) throw new Error(payload?.error || `图片上传失败 (${response.status})`);
+  return payload.url;
+}
+
+function registerPwa() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }, { once: true });
+}
+
+registerPwa();
 
 function openSheet(title, body, onSubmit) {
   el.sheetTitle.textContent = title;

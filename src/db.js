@@ -31,9 +31,12 @@ export async function migrate() {
         day_date DATE NOT NULL,
         title TEXT NOT NULL DEFAULT '',
         notes TEXT NOT NULL DEFAULT '',
+        route_mode VARCHAR(12) NOT NULL DEFAULT 'driving',
         position INTEGER NOT NULL DEFAULT 0,
         UNIQUE (trip_id, day_date)
       );
+
+      ALTER TABLE trip_days ADD COLUMN IF NOT EXISTS route_mode VARCHAR(12) NOT NULL DEFAULT 'driving';
 
       CREATE TABLE IF NOT EXISTS itinerary_items (
         id BIGSERIAL PRIMARY KEY,
